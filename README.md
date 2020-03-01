@@ -2,20 +2,20 @@
 
 ![Generic badge](https://img.shields.io/badge/python-3.7-blue.svg) [![Twitter](https://img.shields.io/badge/Twitter-@pulsecode-blue.svg)](https://twitter.com/pulsecode)
 
-`sub_finder.py` Retrieve subdomains from given domain
+`sub_enum.py` Retrieve subdomains from given domain
 
 ## Installation
 
 ```text
-git clone https://github.com/dfirsec/sub_finder.git
-cd sub_finder
+git clone https://github.com/dfirsec/sub_enum.git
+cd sub_enum
 pip install -r requirements.txt
 ```
 
-## Example Run
+## Usage
 
 ```console
-python sub_finder.py example.com
+python sub_enum.py example.com
 
         _____       __       _______           __
        / ___/__  __/ /_     / ____(_)___  ____/ /__  _____
