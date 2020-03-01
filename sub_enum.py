@@ -169,7 +169,7 @@ if __name__ == "__main__":
     print(tc.CYAN + banner + tc.RESET)
 
     if len(sys.argv) < 2:
-        sys.exit("sub_finder.py: error: the following arguments are required: domain")
+        sys.exit("sub_enum.py: error: the following arguments are required: domain")
     else:
         domain = sys.argv[1]
 
