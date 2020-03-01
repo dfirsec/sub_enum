@@ -136,7 +136,8 @@ def main(domain):
             ip = ''
             if dns_lookup(sub) is None:
                 if time.time() - start_time > 2:
-                    print(f'{tc.WARNING}  DNS lookup taking longer than expected...trying dns.google.com')
+                    print(
+                        f'{tc.WARNING}  DNS lookup taking longer than expected...trying dns.google.com')
                     try:
                         ip = dns_lookup(domain).fallback()
                     except AttributeError:
@@ -158,23 +159,23 @@ def main(domain):
 
 
 if __name__ == "__main__":
-    banner = '''
-        _____       __       _______           __
-       / ___/__  __/ /_     / ____(_)___  ____/ /__  _____
-       \__ \/ / / / __ \   / /_  / / __ \/ __  / _ \/ ___/
-      ___/ / /_/ / /_/ /  / __/ / / / / / /_/ /  __/ /
-     /____/\__,_/_.___/  /_/   /_/_/ /_/\__,_/\___/_/
+    banner = r'''
+      _____       __       ______
+     / ___/__  __/ /_     / ____/___  __  ______ ___
+     \__ \/ / / / __ \   / __/ / __ \/ / / / __ `__ \
+    ___/ / /_/ / /_/ /  / /___/ / / / /_/ / / / / / /
+   /____/\__,_/_.___/  /_____/_/ /_/\__,_/_/ /_/ /_/
     '''
     print(tc.CYAN + banner + tc.RESET)
-    
+
     if len(sys.argv) < 2:
         sys.exit("sub_finder.py: error: the following arguments are required: domain")
     else:
         domain = sys.argv[1]
 
-
     if validators.domain(domain):
         print(f"\n{tc.CYAN}Gathering subdomains...{tc.RESET}")
         main(domain)
     else:
-        sys.exit(f"{tc.ERROR} {tc.BOLD}'{domain}'{tc.RESET} does not appear to be a valid domain.")
+        sys.exit(
+            f"{tc.ERROR} {tc.BOLD}'{domain}'{tc.RESET} does not appear to be a valid domain.")
