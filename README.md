@@ -1,4 +1,4 @@
-# Subdomain Enumeration
+# Subdomain Finder
 
 ![Generic badge](https://img.shields.io/badge/python-3.7-blue.svg) [![Twitter](https://img.shields.io/badge/Twitter-@pulsecode-blue.svg)](https://twitter.com/pulsecode)
 
@@ -22,8 +22,14 @@ python sub_enum.py example.com
      \__ \/ / / / __ \   / __/ / __ \/ / / / __ `__ \
     ___/ / /_/ / /_/ /  / /___/ / / / /_/ / / / / / /
    /____/\__,_/_.___/  /_____/_/ /_/\__,_/_/ /_/ /_/
+   v1.8
+
 
 Gathering subdomains...
+[ Quick Results -- bufferover.run ]
+www.example.com                              : 93.184.216.34
+
+[ Performing Lookups -- takes a little longer ]
 ⮩  Discovered: nowhereatall.example.com
 ⮩  Discovered: konferencje.example.com
 ⮩  Discovered: dev.example.com
@@ -55,6 +61,6 @@ Gathering subdomains...
 |     products. | example.com | None            |
 |        sales. | example.com | None            |
 |      support. | example.com | None            |
-|          www. | example.com | 199.168.151.251 |
+|          www. | example.com | 93.184.216.34   |
 +---------------+-------------+-----------------+
 ```
