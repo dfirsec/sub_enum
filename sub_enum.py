@@ -90,10 +90,13 @@ def bufferover_get_subs(domain):
         #         rdns_dom = [sub.split(',')[1] for sub in rdns]
         #         rdns_ip = [sub.split(',')[0] for sub in rdns]
         #         rdns_res = dict(zip(rdns_dom, rdns_ip))
-        #         print(rdns_res)
 
         # # combine dicts
-        # combined = {**fdns_res, **rdns_res}
+        # if rdns_res:
+        #     combined = {**fdns_res, **rdns_res}
+        #     return combined
+        # else:
+        #     return fdns_res
 
         return fdns_res
     except Exception:
@@ -110,9 +113,9 @@ def crt_get_subs(domain):
         for tr in soup.find_all('tr')[2:]:
             td = tr.find_all('td')
             if '*' not in td[4].text:
-                    yield td[4].get_text(separator=" ").strip('\n')
+                yield td[4].get_text(separator=" ").strip('\n')
     except Exception:
-            pass
+        pass
 
 
 def certspotter_get_subs(domain):
@@ -155,7 +158,7 @@ def main(domain):
     [print(f"{sub:45}: {ip}") for (sub, ip) in sorted(bufferover_get_subs(domain).items())]  # nopep8
     for sub, _ in bufferover_get_subs(domain).items():
         subs.append(sub)
-        
+
     print(f'\n{tc.YELLOW}[ Performing Lookups -- takes a little longer ]{tc.RESET}')  # nopep8
     for sub in crt_get_subs(domain):
         for item in sub.split(' '):
