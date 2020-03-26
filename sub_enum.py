@@ -160,47 +160,50 @@ def main(domain):
         subs.append(sub)
 
     print(f'\n{tc.YELLOW}[ Performing Lookups -- takes a little longer ]{tc.RESET}')  # nopep8
-    for sub in crt_get_subs(domain):
-        for item in sub.split(' '):
-            subs.append(item)
+    try:
+        for sub in crt_get_subs(domain):
+            for item in sub.split(' '):
+                subs.append(item)
 
-    if certspotter_get_subs(domain):
-        for sub in set(certspotter_get_subs(domain)):
-            subs.append(sub)
-    else:
-        print(f"{tc.WARNING}  Looks like certspotter is throttling us...")
+        if certspotter_get_subs(domain):
+            for sub in set(certspotter_get_subs(domain)):
+                subs.append(sub)
+        else:
+            print(f"{tc.WARNING}  Looks like certspotter is throttling us...")
 
-    for sub in vt_get_subs(domain):
-        for item in sub:
-            subs.append(item)
+        for sub in vt_get_subs(domain):
+            for item in sub:
+                subs.append(item)
 
-    subset = set(subs)
-    for sub in subset:
-        if sub != domain and not re.search(email, sub):
-            print(f'{tc.PROCESSING}  Discovered: {tc.BOLD}{sub.lower()}{tc.RESET}')
-            start_time = time.time()
-            ip = ''
-            if dns_lookup(sub) is None:
-                if time.time() - start_time > 2:
-                    print(f'{tc.WARNING}  DNS lookup taking longer than expected...trying dns.google.com')  # nopep8
-                    try:
-                        ip = dns_lookup(domain).fallback()
-                    except AttributeError:
-                        pass
+        subset = set(subs)
+        for sub in subset:
+            if sub != domain and not re.search(email, sub):
+                print(f'{tc.PROCESSING}  Discovered: {tc.BOLD}{sub.lower()}{tc.RESET}')
+                start_time = time.time()
+                ip = ''
+                if dns_lookup(sub) is None:
+                    if time.time() - start_time > 2:
+                        print(f'{tc.WARNING}  DNS lookup taking longer than expected...trying dns.google.com')  # nopep8
+                        try:
+                            ip = dns_lookup(domain).fallback()
+                        except AttributeError:
+                            pass
+                    else:
+                        ip = f"{tc.GRAY}{dns_lookup(sub)}{tc.RESET}"
                 else:
-                    ip = f"{tc.GRAY}{dns_lookup(sub)}{tc.RESET}"
-            else:
-                ip = dns_lookup(sub)
+                    ip = dns_lookup(sub)
 
-            root = sub.split(domain)
-            subdomain = f"{tc.BOLD}{''.join(root).lower()}{tc.RESET}"
-            x.add_row([subdomain, domain, str(ip)])
+                root = sub.split(domain)
+                subdomain = f"{tc.BOLD}{''.join(root).lower()}{tc.RESET}"
+                x.add_row([subdomain, domain, str(ip)])
 
-    # check if rows contain data
-    if x._rows:
-        print(f"\n{x}")
-    else:
-        print(f"No data available for '{domain}'")
+        # check if rows contain data
+        if x._rows:
+            print(f"\n{x}")
+        else:
+            print(f"No data available for '{domain}'")
+    except KeyboardInterrupt:
+        sys.exit("-- Exited --")
 
 
 if __name__ == "__main__":
