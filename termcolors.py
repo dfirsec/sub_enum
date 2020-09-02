@@ -1,12 +1,9 @@
-#!/usr/bin/env python
-
 from colorama import Fore, Style, init
-
-init()
 
 
 class Termcolor:
     # Unicode Symbols and colors
+    init()
     CYAN = Fore.CYAN + Style.BRIGHT
     GREEN = Fore.GREEN
     GRAY = Fore.BLACK + Style.BRIGHT
