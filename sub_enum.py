@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-
-__author__ = "DFIRSec (@pulsecode)"
-__version__ = "1.8"
-__description__ = "Script to retrieve subdomains from given domain."
-
 import json
 import os
 import re
@@ -20,7 +14,13 @@ from prettytable import PrettyTable
 from requests.exceptions import (ConnectTimeout, HTTPError, RequestException,
                                  Timeout)
 
+from lxml.html import fromstring
 from termcolors import Termcolor as tc
+
+__author__ = "DFIRSec (@pulsecode)"
+__version__ = "2.0.1"
+__description__ = "Script to retrieve subdomains from given domain."
+
 
 email = r"(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]{2,5}$)"
 ipv4 = re.compile(r"(?![0])\d{1,}\.\d{1,3}\.\d{1,3}\.(?![0])\d{1,3}")
@@ -40,7 +40,7 @@ def connect(url):
     except ConnectionError as err:
         print(f"{tc.WARNING} Connection Error:{tc.RESET}", err)
     except RequestException as err:
-        sys.exit(f"{tc.WARNING} Issue encountered:{tc.RESET}", err)
+        quit(f"{tc.WARNING} Issue encountered:{tc.RESET}", err)
 
 
 def dns_lookup(domain):
@@ -65,7 +65,7 @@ def dns_lookup(domain):
             pass
 
     try:
-        answer = resolver.query(domain, 'A')
+        answer = resolver.resolve(domain, 'A')
         return answer[0]
     except (dns.resolver.NoAnswer,
             dns.exception.Timeout,
@@ -84,7 +84,7 @@ def bufferover_get_subs(domain):
             fdns_ip = [sub.split(',')[0] for sub in fdns]
             fdns_res = dict(zip(fdns_dom, fdns_ip))
 
-        #     # reverse dns =  ip to domain
+        #     # reverse dns = ip to domain
         #     if connect(url).json()['RDNS']:
         #         rdns = [sub for sub in connect(url).json()['RDNS']]
         #         rdns_dom = [sub.split(',')[1] for sub in rdns]
@@ -115,6 +115,34 @@ def crt_get_subs(domain):
             if '*' not in td[4].text:
                 yield td[4].get_text(separator=" ").strip('\n')
     except Exception:
+        pass
+
+
+def get_headers(domain):
+    url = f'http://www.{domain}'
+    headers = connect(url).headers
+    soup = BeautifulSoup(connect(url).text, 'html.parser')
+    title = soup.find('title')
+    if title:
+        print(f"Title: {title.string}")
+
+    try:
+        cookie = headers['Set-Cookie']
+        redir = re.search(r"(?i)domain=(.*)$", cookie).group(1).split(';')[0]
+        dom = redir[0].replace('.', '') + redir[1:]
+        if connect(url).history and dom != domain:
+            print(f"Redirects to: {redir}")
+    except (AttributeError, KeyError):
+        pass
+
+    try:
+        print("Server:", headers['Server'])
+    except KeyError:
+        pass
+
+    try:
+        print(headers['X-Generator'])
+    except KeyError:
         pass
 
 
@@ -164,21 +192,19 @@ def main(domain):
         for sub in crt_get_subs(domain):
             for item in sub.split(' '):
                 subs.append(item)
-
         if certspotter_get_subs(domain):
             for sub in set(certspotter_get_subs(domain)):
                 subs.append(sub)
         else:
             print(f"{tc.WARNING}  Looks like certspotter is throttling us...")
-
         for sub in vt_get_subs(domain):
             for item in sub:
                 subs.append(item)
-
         subset = set(subs)
         for sub in subset:
             if sub != domain and not re.search(email, sub):
-                print(f'{tc.PROCESSING}  Discovered: {tc.BOLD}{sub.lower()}{tc.RESET}')
+                print(
+                    f'{tc.PROCESSING}  Discovered: {tc.BOLD}{sub.lower()}{tc.RESET}')
                 start_time = time.time()
                 ip = ''
                 if dns_lookup(sub) is None:
@@ -192,18 +218,18 @@ def main(domain):
                         ip = f"{tc.GRAY}{dns_lookup(sub)}{tc.RESET}"
                 else:
                     ip = dns_lookup(sub)
-
                 root = sub.split(domain)
                 subdomain = f"{tc.BOLD}{''.join(root).lower()}{tc.RESET}"
                 x.add_row([subdomain, domain, str(ip)])
-
         # check if rows contain data
         if x._rows:
             print(f"\n{x}")
         else:
             print(f"No data available for '{domain}'")
+        print(f"\n{tc.YELLOW}[ Primary Domain Server Headers ]{tc.RESET}")
+        get_headers(domain)
     except KeyboardInterrupt:
-        sys.exit("-- Exited --")
+        quit("-- Exited --")
 
 
 if __name__ == "__main__":
@@ -218,7 +244,7 @@ if __name__ == "__main__":
     print(tc.CYAN + banner + tc.RESET)
 
     if len(sys.argv) < 2:
-        sys.exit("sub_enum.py: error: the following arguments are required: domain")
+        quit("sub_enum.py: error: the following arguments are required: domain")
     else:
         domain = sys.argv[1]
 
@@ -226,4 +252,4 @@ if __name__ == "__main__":
         print(f"\n{tc.CYAN}Gathering subdomains...{tc.RESET}")
         main(domain)
     else:
-        sys.exit(f"{tc.ERROR} {tc.BOLD}'{domain}'{tc.RESET} does not appear to be a valid domain.")  # nopep8
+        quit(f"{tc.ERROR} {tc.BOLD}'{domain}'{tc.RESET} does not appear to be a valid domain.")  # nopep8
