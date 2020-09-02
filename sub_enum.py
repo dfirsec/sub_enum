@@ -244,7 +244,7 @@ if __name__ == "__main__":
     print(tc.CYAN + banner + tc.RESET)
 
     if len(sys.argv) < 2:
-        quit("sub_enum.py: error: the following arguments are required: domain")
+        sys.exit("sub_enum.py: error: the following arguments are required: domain")
     else:
         domain = sys.argv[1]
 
@@ -252,4 +252,4 @@ if __name__ == "__main__":
         print(f"\n{tc.CYAN}Gathering subdomains...{tc.RESET}")
         main(domain)
     else:
-        quit(f"{tc.ERROR} {tc.BOLD}'{domain}'{tc.RESET} does not appear to be a valid domain.")  # nopep8
+        sys.exit(f"{tc.ERROR} {tc.BOLD}'{domain}'{tc.RESET} does not appear to be a valid domain.")  # nopep8
