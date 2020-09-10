@@ -9,16 +9,16 @@ import dns.resolver
 import requests
 import validators
 from bs4 import BeautifulSoup
-from colorama import Fore, Style, init
+# from lxml.html import fromstring
 from prettytable import PrettyTable
 from requests.exceptions import (ConnectTimeout, HTTPError, RequestException,
                                  Timeout)
+from termcolors import Termcolor
 
-from lxml.html import fromstring
-from termcolors import Termcolor as tc
+tc = Termcolor()
 
 __author__ = "DFIRSec (@pulsecode)"
-__version__ = "2.0.1"
+__version__ = ".0.0.2"
 __description__ = "Script to retrieve subdomains from given domain."
 
 
