@@ -1,5 +1,3 @@
-import json
-import os
 import re
 import sys
 import time
@@ -9,10 +7,11 @@ import dns.resolver
 import requests
 import validators
 from bs4 import BeautifulSoup
+
 # from lxml.html import fromstring
 from prettytable import PrettyTable
-from requests.exceptions import (ConnectTimeout, HTTPError, RequestException,
-                                 Timeout)
+from requests.exceptions import HTTPError, RequestException, Timeout
+
 from termcolors import Termcolor
 
 tc = Termcolor()
@@ -47,41 +46,39 @@ def dns_lookup(domain):
     resolver = dns.resolver.Resolver(configure=False)
     resolver.timeout = 2
     resolver.lifetime = 2
-    resolver.nameservers = ['8.8.8.8', '8.8.4.4']
+    resolver.nameservers = ["8.8.8.8", "8.8.4.4"]
 
     # fallback method if default dns lookup fails
     def fallback():
-        url = f'https://dns.google.com/resolve?name={domain}&type=A'
+        url = f"https://dns.google.com/resolve?name={domain}&type=A"
         try:
-            if connect(url).json()['Answer']:
-                answer = connect(url).json()['Answer']
-                if re.findall(ipv4, answer[0]['data']):
-                    return answer[0]['data']
-                elif re.findall(ipv4, answer[1]['data']):
-                    return answer[1]['data']
+            if connect(url).json()["Answer"]:
+                answer = connect(url).json()["Answer"]
+                if re.findall(ipv4, answer[0]["data"]):
+                    return answer[0]["data"]
+                elif re.findall(ipv4, answer[1]["data"]):
+                    return answer[1]["data"]
             else:
                 return False
         except (KeyError, IndexError):
             pass
 
     try:
-        answer = resolver.resolve(domain, 'A')
+        answer = resolver.resolve(domain, "A")
         return answer[0]
-    except (dns.resolver.NoAnswer,
-            dns.exception.Timeout,
-            dns.resolver.NXDOMAIN,
-            dns.resolver.NoNameservers):
+    except (dns.resolver.NoAnswer, dns.exception.Timeout, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
         return fallback()
 
 
 def bufferover_get_subs(domain):
-    url = f'https://dns.bufferover.run/dns?q=.{domain}'
+    url = f"https://dns.bufferover.run/dns?q=.{domain}"
+    global fdns_res
     try:
         if connect(url).json():
             # forward dns = domain to ip
-            fdns = [sub for sub in connect(url).json()['FDNS_A']]
-            fdns_dom = [sub.split(',')[1] for sub in fdns]
-            fdns_ip = [sub.split(',')[0] for sub in fdns]
+            fdns = [sub for sub in connect(url).json()["FDNS_A"]]
+            fdns_dom = [sub.split(",")[1] for sub in fdns]
+            fdns_ip = [sub.split(",")[0] for sub in fdns]
             fdns_res = dict(zip(fdns_dom, fdns_ip))
 
         #     # reverse dns = ip to domain
@@ -104,56 +101,58 @@ def bufferover_get_subs(domain):
 
 
 def crt_get_subs(domain):
-    url = f'https://crt.sh/?q=%25.{domain}'
-    soup = ''
+    url = f"https://crt.sh/?q=%25.{domain}"
+    soup = ""
     try:
         content = connect(url).content
-        soup = BeautifulSoup(content, 'html.parser')
+        soup = BeautifulSoup(content, "html.parser")
 
-        for tr in soup.find_all('tr')[2:]:
-            td = tr.find_all('td')
-            if '*' not in td[4].text:
-                yield td[4].get_text(separator=" ").strip('\n')
+        for tr in soup.find_all("tr")[2:]:
+            td = tr.find_all("td")
+            if "*" not in td[4].text:
+                yield td[4].get_text(separator=" ").strip("\n")
     except Exception:
         pass
 
 
 def get_headers(domain):
-    url = f'http://www.{domain}'
-    headers = connect(url).headers
-    soup = BeautifulSoup(connect(url).text, 'html.parser')
-    title = soup.find('title')
-    if title:
-        print(f"Title: {title.string}")
-
+    url = f"http://{domain}"
     try:
-        cookie = headers['Set-Cookie']
-        redir = re.search(r"(?i)domain=(.*)$", cookie).group(1).split(';')[0]
-        dom = redir[0].replace('.', '') + redir[1:]
+        headers = connect(url).headers
+        soup = BeautifulSoup(connect(url).text, "html.parser")
+        title = soup.find("title")
+        if title:
+            print(f"Title: {title.string}")
+
+        cookie = headers["Set-Cookie"]
+        redir = re.search(r"(?i)domain=(.*)$", cookie).group(1).split(";")[0]
+        dom = redir[0].replace(".", "") + redir[1:]
         if connect(url).history and dom != domain:
             print(f"Redirects to: {redir}")
     except (AttributeError, KeyError):
         pass
 
     try:
-        print("Server:", headers['Server'])
-    except KeyError:
+        headers = connect(url).headers
+        print("Server:", headers["Server"])
+    except (AttributeError, KeyError):
         pass
 
     try:
-        print(headers['X-Generator'])
-    except KeyError:
+        headers = connect(url).headers
+        print(headers["X-Generator"])
+    except (AttributeError, KeyError):
         pass
 
 
 def certspotter_get_subs(domain):
-    url = f'https://certspotter.com/api/v0/certs?domain={domain}'
+    url = f"https://certspotter.com/api/v0/certs?domain={domain}"
     try:
         if connect(url).json():
-            lists = [name['dns_names'] for name in connect(url).json()]
+            lists = [name["dns_names"] for name in connect(url).json()]
             results = [y for x in lists for y in x]
             for sub in results:
-                if domain in sub and '*.' not in sub:
+                if domain in sub and "*." not in sub:
                     yield sub
         else:
             return False
@@ -162,7 +161,7 @@ def certspotter_get_subs(domain):
 
 
 def vt_get_subs(domain):
-    url = f'https://www.virustotal.com/ui/domains/{domain}/subdomains'
+    url = f"https://www.virustotal.com/ui/domains/{domain}/subdomains"
     subd_regex = r"\"id\":\s\"(.*)\""
     try:
         match = re.findall(subd_regex, connect(url).text)
@@ -183,14 +182,17 @@ def main(domain):
     subs = []
 
     print(f"{tc.YELLOW}[ Quick Results -- bufferover.run ]{tc.RESET}")
-    [print(f"{sub:45}: {ip}") for (sub, ip) in sorted(bufferover_get_subs(domain).items())]  # nopep8
-    for sub, _ in bufferover_get_subs(domain).items():
-        subs.append(sub)
+    try:
+        [print(f"{sub:45}: {ip}") for (sub, ip) in sorted(bufferover_get_subs(domain).items())]  # nopep8
+        for sub, _ in bufferover_get_subs(domain).items():
+            subs.append(sub)
+    except AttributeError:
+        print(f"No data available for {domain}")
 
-    print(f'\n{tc.YELLOW}[ Performing Lookups -- takes a little longer ]{tc.RESET}')  # nopep8
+    print(f"\n{tc.YELLOW}[ Performing Lookups -- takes a little longer ]{tc.RESET}")  # nopep8
     try:
         for sub in crt_get_subs(domain):
-            for item in sub.split(' '):
+            for item in sub.split(" "):
                 subs.append(item)
         if certspotter_get_subs(domain):
             for sub in set(certspotter_get_subs(domain)):
@@ -203,13 +205,14 @@ def main(domain):
         subset = set(subs)
         for sub in subset:
             if sub != domain and not re.search(email, sub):
-                print(
-                    f'{tc.PROCESSING}  Discovered: {tc.BOLD}{sub.lower()}{tc.RESET}')
+                print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub.lower()}{tc.RESET}")
                 start_time = time.time()
-                ip = ''
+                ip = ""
                 if dns_lookup(sub) is None:
                     if time.time() - start_time > 2:
-                        print(f'{tc.WARNING}  DNS lookup taking longer than expected...trying dns.google.com')  # nopep8
+                        print(
+                            f"{tc.WARNING}  DNS lookup taking longer than expected...trying dns.google.com"
+                        )  # nopep8
                         try:
                             ip = dns_lookup(domain).fallback()
                         except AttributeError:
@@ -233,14 +236,14 @@ def main(domain):
 
 
 if __name__ == "__main__":
-    banner = rf'''
+    banner = rf"""
       _____       __       ______
      / ___/__  __/ /_     / ____/___  __  ______ ___
      \__ \/ / / / __ \   / __/ / __ \/ / / / __ `__ \
     ___/ / /_/ / /_/ /  / /___/ / / / /_/ / / / / / /
    /____/\__,_/_.___/  /_____/_/ /_/\__,_/_/ /_/ /_/
    v{__version__}
-    '''
+    """
     print(tc.CYAN + banner + tc.RESET)
 
     if len(sys.argv) < 2:
