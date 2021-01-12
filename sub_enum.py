@@ -7,17 +7,15 @@ import dns.resolver
 import requests
 import validators
 from bs4 import BeautifulSoup
-
-# from lxml.html import fromstring
 from prettytable import PrettyTable
-from requests.exceptions import HTTPError, RequestException, Timeout
+from requests.exceptions import ConnectionError, HTTPError, Timeout
 
 from termcolors import Termcolor
 
 tc = Termcolor()
 
 __author__ = "DFIRSec (@pulsecode)"
-__version__ = ".0.0.2"
+__version__ = ".0.0.3"
 __description__ = "Script to retrieve subdomains from given domain."
 
 
@@ -33,13 +31,13 @@ def connect(url):
         if resp.status_code == 200:
             return resp
     except HTTPError as err:
-        print(f"{tc.WARNING} HTTP Error:{tc.RESET}", err)
+        print(f"{tc.WARNING} HTTP Error:{tc.RESET} {err}")
     except Timeout as err:
-        print(f"{tc.WARNING} Timeout encountered:{tc.RESET}", err)
+        print(f"{tc.WARNING} Timeout encountered:{tc.RESET} {err}")
     except ConnectionError as err:
-        print(f"{tc.WARNING} Connection Error:{tc.RESET}", err)
-    except RequestException as err:
-        quit(f"{tc.WARNING} Issue encountered:{tc.RESET}", err)
+        print(f"{tc.WARNING} Connection Error:{tc.RESET} {err}")
+    except Exception as err:
+        sys.exit(f"{tc.WARNING} Issue encountered:{tc.RESET} {err}")
 
 
 def dns_lookup(domain):
@@ -119,30 +117,31 @@ def get_headers(domain):
     url = f"http://{domain}"
     try:
         headers = connect(url).headers
+        cookie = headers["Set-Cookie"]
+        server = headers["Server"]
+        xgen = headers["X-Generator"]
+    except (AttributeError, KeyError):
+        sys.exit("Data not available")
+    else:
         soup = BeautifulSoup(connect(url).text, "html.parser")
         title = soup.find("title")
         if title:
             print(f"Title: {title.string}")
 
-        cookie = headers["Set-Cookie"]
         redir = re.search(r"(?i)domain=(.*)$", cookie).group(1).split(";")[0]
         dom = redir[0].replace(".", "") + redir[1:]
         if connect(url).history and dom != domain:
             print(f"Redirects to: {redir}")
-    except (AttributeError, KeyError):
-        pass
 
     try:
-        headers = connect(url).headers
-        print("Server:", headers["Server"])
+        print("Server:", server)
     except (AttributeError, KeyError):
-        pass
+        sys.exit("Data not available")
 
     try:
-        headers = connect(url).headers
-        print(headers["X-Generator"])
+        print("X-Generator", xgen)
     except (AttributeError, KeyError):
-        pass
+        sys.exit("Data not available")
 
 
 def certspotter_get_subs(domain):
