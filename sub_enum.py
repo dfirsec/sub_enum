@@ -145,7 +145,7 @@ def get_headers(domain):
 
 
 def certspotter_get_subs(domain):
-    url = f"https://certspotter.com/api/v0/certs?domain={domain}"
+    url = f"https://api.certspotter.com/v1/issuances?domain={domain}"
     try:
         if connect(url).json():
             lists = [name["dns_names"] for name in connect(url).json()]
@@ -198,9 +198,9 @@ def main(domain):
                 subs.append(sub)
         else:
             print(f"{tc.WARNING}  Looks like certspotter is throttling us...")
-        for sub in vt_get_subs(domain):
-            for item in sub:
-                subs.append(item)
+        # for sub in vt_get_subs(domain):
+        #     for item in sub:
+        #         subs.append(item)
         subset = set(subs)
         for sub in subset:
             if sub != domain and not re.search(email, sub):
@@ -227,7 +227,7 @@ def main(domain):
         if x._rows:
             print(f"\n{x}")
         else:
-            print(f"No data available for '{domain}'")
+            print(f"No data available for {domain}")
         print(f"\n{tc.YELLOW}[ Primary Domain Server Headers ]{tc.RESET}")
         get_headers(domain)
     except KeyboardInterrupt:

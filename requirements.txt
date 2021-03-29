@@ -1,7 +1,7 @@
 bs4>=0.0.1
-colorama>=0.4.3
-dnspython>=2.0.0
+colorama>=0.4.4
+dnspython>=2.1.0
 lxml>=4.6.2
-prettytable>=0.7.2
-requests>=2.24.0
-validators>=0.18.0
+prettytable>=2.1.0
+requests>=2.25.1
+validators>=0.18.2
