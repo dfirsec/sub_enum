@@ -117,7 +117,6 @@ def crt_get_subs(domain):
 def certspotter_get_subs(domain):
     url = f"https://api.certspotter.com/v1/issuances?domain={domain}&include_subdomains=true&expand=dns_names&expand=issuer&expand=cert"
     try:
-        # grab = asyncio.run(async_connect(url))
         loop = asyncio.get_event_loop()
         grab = loop.run_until_complete(async_connect(url))
     except Exception:
@@ -135,15 +134,8 @@ def certspotter_get_subs(domain):
 
 
 def web_archive(domain):
-    # Directory path for web archive results
-    parent = Path(__file__).resolve().parent
-    dirpath = parent.joinpath(f"web_archive")
-    if not dirpath.exists():
-        dirpath.mkdir(parents=True)
-
     url = f"http://web.archive.org/cdx/search/cdx?url={domain}/&matchType=domain&output=json&fl=original&collapse=urlkey&limit=500000"
     try:
-        # grab = asyncio.run(async_connect(url))
         loop = asyncio.get_event_loop()
         grab = loop.run_until_complete(async_connect(url))
     except Exception:
