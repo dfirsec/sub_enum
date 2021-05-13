@@ -1,9 +1,11 @@
+import asyncio
 import re
 import sys
 import time
 from pathlib import Path
 from urllib.parse import urlparse
 
+import aiohttp
 import dns.exception
 import dns.resolver
 import requests
@@ -17,7 +19,7 @@ from termcolors import Termcolor
 tc = Termcolor()
 
 __author__ = "DFIRSec (@pulsecode)"
-__version__ = ".0.0.4"
+__version__ = "0.0.5"
 __description__ = "Script to retrieve subdomains from given domain."
 
 # regexes
@@ -40,6 +42,18 @@ def connect(url):
         print(f"{tc.WARNING} Connection Error:{tc.RESET} {err}")
     except Exception as err:
         sys.exit(f"{tc.WARNING} Issue encountered:{tc.RESET} {err}")
+
+
+async def async_connect(url):
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"}
+    async with aiohttp.ClientSession(headers=headers) as session:
+        try:
+            async with session.get(url) as resp:
+                if resp.status == 200:
+                    results = await resp.json()
+                    return results
+        except aiohttp.ClientConnectorError as e:
+            print("Connection Error:", str(e))
 
 
 def dns_lookup(domain):
@@ -80,21 +94,6 @@ def bufferover_get_subs(domain):
             fdns_dom = [sub.split(",")[1] for sub in fdns]
             fdns_ip = [sub.split(",")[0] for sub in fdns]
             fdns_res = dict(zip(fdns_dom, fdns_ip))
-
-        #     # reverse dns = ip to domain
-        #     if connect(url).json()['RDNS']:
-        #         rdns = [sub for sub in connect(url).json()['RDNS']]
-        #         rdns_dom = [sub.split(',')[1] for sub in rdns]
-        #         rdns_ip = [sub.split(',')[0] for sub in rdns]
-        #         rdns_res = dict(zip(rdns_dom, rdns_ip))
-
-        # # combine dicts
-        # if rdns_res:
-        #     combined = {**fdns_res, **rdns_res}
-        #     return combined
-        # else:
-        #     return fdns_res
-
         return fdns_res
     except Exception:
         pass
@@ -115,60 +114,24 @@ def crt_get_subs(domain):
         pass
 
 
-def get_headers(domain):
-    url = f"http://{domain}"
-    try:
-        headers = connect(url).headers
-        cookie = headers["Set-Cookie"]
-        server = headers["Server"]
-        xgen = headers["X-Generator"]
-    except (AttributeError, KeyError):
-        sys.exit("Data not available")
-    else:
-        soup = BeautifulSoup(connect(url).text, "html.parser")
-        title = soup.find("title")
-        if title:
-            print(f"Title: {title.string}")
-
-        redir = re.search(r"(?i)domain=(.*)$", cookie).group(1).split(";")[0]
-        dom = redir[0].replace(".", "") + redir[1:]
-        if connect(url).history and dom != domain:
-            print(f"Redirects to: {redir}")
-
-    try:
-        print("Server:", server)
-    except (AttributeError, KeyError):
-        sys.exit("Data not available")
-
-    try:
-        print("X-Generator", xgen)
-    except (AttributeError, KeyError):
-        sys.exit("Data not available")
-
-
 def certspotter_get_subs(domain):
-    url = f"https://api.certspotter.com/v1/issuances?domain={domain}"
+    url = f"https://api.certspotter.com/v1/issuances?domain={domain}&include_subdomains=true&expand=dns_names&expand=issuer&expand=cert"
     try:
-        if connect(url).json():
-            lists = [name["dns_names"] for name in connect(url).json()]
+        # grab = asyncio.run(async_connect(url))
+        loop = asyncio.get_event_loop()
+        grab = loop.run_until_complete(async_connect(url))
+    except Exception:
+        pass
+    else:
+        try:
+            lists = [name["dns_names"] for name in grab]
+        except KeyError:
+            pass
+        else:
             results = [y for x in lists for y in x]
             for sub in results:
                 if domain in sub and "*." not in sub:
                     yield sub
-        else:
-            return False
-    except Exception:
-        pass
-
-
-def vt_get_subs(domain):
-    url = f"https://www.virustotal.com/ui/domains/{domain}/subdomains"
-    subd_regex = r"\"id\":\s\"(.*)\""
-    try:
-        match = re.findall(subd_regex, connect(url).text)
-        yield match
-    except Exception:
-        pass
 
 
 def web_archive(domain):
@@ -180,22 +143,17 @@ def web_archive(domain):
 
     url = f"http://web.archive.org/cdx/search/cdx?url={domain}/&matchType=domain&output=json&fl=original&collapse=urlkey&limit=500000"
     try:
-        if connect(url).json():
-            lists = [r for r in connect(url).json()]
-            u = [urlparse("".join(result)).netloc.replace(":80", "") for result in lists[1:]]
-            results = f"{dirpath}/{domain.replace('.', '_')}.txt"
-            with open(results, "w") as f:
-                for sub in list(set(u)):
-                    print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub}{tc.RESET}")
-                    f.write("".join(sub) + "\n")
-            # with open(results, "w") as f:
-            #     for result in lists[1:]:
-            #         f.write("".join(result) + "\n")
-            print(f"[+] Results written to {'/'.join(Path(results).parts[-2:])}")
-        else:
-            print(f"No data available for {domain}")
+        # grab = asyncio.run(async_connect(url))
+        loop = asyncio.get_event_loop()
+        grab = loop.run_until_complete(async_connect(url))
     except Exception:
+        print(f"No data available for {domain}")
         pass
+    else:
+        lists = [r for r in grab]
+        subs = [urlparse("".join(result)).netloc.replace(":80", "") for result in lists[1:]]
+        for sub in list(set(subs)):
+            print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub}{tc.RESET}")
 
 
 def main(domain):
@@ -229,10 +187,8 @@ def main(domain):
             for sub in set(certspotter_get_subs(domain)):
                 subs.append(sub)
         else:
-            print(f"{tc.WARNING}  Looks like certspotter is throttling us...")
-        # for sub in vt_get_subs(domain):
-        #     for item in sub:
-        #         subs.append(item)
+            print(f"{tc.WARNING}  Certspotter might be throttling us...")
+
         subset = set(subs)
         for sub in subset:
             if sub != domain and not re.search(email, sub):
@@ -259,8 +215,6 @@ def main(domain):
             print(f"\n{x}")
         else:
             print(f"No data available for {domain}")
-        # print(f"\n{tc.YELLOW}[ Primary Domain Server Headers ]{tc.RESET}")
-        # get_headers(domain)
     except KeyboardInterrupt:
         quit("-- Exited --")
 
