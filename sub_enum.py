@@ -1,6 +1,8 @@
 import re
 import sys
 import time
+from pathlib import Path
+from urllib.parse import urlparse
 
 import dns.exception
 import dns.resolver
@@ -15,17 +17,17 @@ from termcolors import Termcolor
 tc = Termcolor()
 
 __author__ = "DFIRSec (@pulsecode)"
-__version__ = ".0.0.3"
+__version__ = ".0.0.4"
 __description__ = "Script to retrieve subdomains from given domain."
 
-
+# regexes
 email = r"(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]{2,5}$)"
 ipv4 = re.compile(r"(?![0])\d{1,}\.\d{1,3}\.\d{1,3}\.(?![0])\d{1,3}")
 
 
 def connect(url):
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"}  # nopep8
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"}
         resp = requests.get(url, timeout=5, headers=headers)
         resp.raise_for_status()
         if resp.status_code == 200:
@@ -169,6 +171,33 @@ def vt_get_subs(domain):
         pass
 
 
+def web_archive(domain):
+    # Directory path for web archive results
+    parent = Path(__file__).resolve().parent
+    dirpath = parent.joinpath(f"web_archive")
+    if not dirpath.exists():
+        dirpath.mkdir(parents=True)
+
+    url = f"http://web.archive.org/cdx/search/cdx?url={domain}/&matchType=domain&output=json&fl=original&collapse=urlkey&limit=500000"
+    try:
+        if connect(url).json():
+            lists = [r for r in connect(url).json()]
+            u = [urlparse("".join(result)).netloc.replace(":80", "") for result in lists[1:]]
+            results = f"{dirpath}/{domain.replace('.', '_')}.txt"
+            with open(results, "w") as f:
+                for sub in list(set(u)):
+                    print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub}{tc.RESET}")
+                    f.write("".join(sub) + "\n")
+            # with open(results, "w") as f:
+            #     for result in lists[1:]:
+            #         f.write("".join(result) + "\n")
+            print(f"[+] Results written to {'/'.join(Path(results).parts[-2:])}")
+        else:
+            print(f"No data available for {domain}")
+    except Exception:
+        pass
+
+
 def main(domain):
     x = PrettyTable()
     x.field_names = ["Subdomain", "Domain", "Resolved"]
@@ -182,13 +211,16 @@ def main(domain):
 
     print(f"{tc.YELLOW}[ Quick Results -- bufferover.run ]{tc.RESET}")
     try:
-        [print(f"{sub:45}: {ip}") for (sub, ip) in sorted(bufferover_get_subs(domain).items())]  # nopep8
+        [print(f"{sub:45}: {ip}") for (sub, ip) in sorted(bufferover_get_subs(domain).items())]
         for sub, _ in bufferover_get_subs(domain).items():
             subs.append(sub)
     except AttributeError:
         print(f"No data available for {domain}")
 
-    print(f"\n{tc.YELLOW}[ Performing Lookups -- takes a little longer ]{tc.RESET}")  # nopep8
+    print(f"\n{tc.YELLOW}[ Trying Web Archive -- archive.org ]{tc.RESET}")
+    web_archive(domain)
+
+    print(f"\n{tc.YELLOW}[ Performing Lookups -- takes a little longer ]{tc.RESET}")
     try:
         for sub in crt_get_subs(domain):
             for item in sub.split(" "):
@@ -209,9 +241,7 @@ def main(domain):
                 ip = ""
                 if dns_lookup(sub) is None:
                     if time.time() - start_time > 2:
-                        print(
-                            f"{tc.WARNING}  DNS lookup taking longer than expected...trying dns.google.com"
-                        )  # nopep8
+                        print(f"{tc.WARNING}  DNS lookup taking longer than expected...trying dns.google.com")
                         try:
                             ip = dns_lookup(domain).fallback()
                         except AttributeError:
@@ -220,6 +250,7 @@ def main(domain):
                         ip = f"{tc.GRAY}{dns_lookup(sub)}{tc.RESET}"
                 else:
                     ip = dns_lookup(sub)
+
                 root = sub.split(domain)
                 subdomain = f"{tc.BOLD}{''.join(root).lower()}{tc.RESET}"
                 x.add_row([subdomain, domain, str(ip)])
@@ -228,8 +259,8 @@ def main(domain):
             print(f"\n{x}")
         else:
             print(f"No data available for {domain}")
-        print(f"\n{tc.YELLOW}[ Primary Domain Server Headers ]{tc.RESET}")
-        get_headers(domain)
+        # print(f"\n{tc.YELLOW}[ Primary Domain Server Headers ]{tc.RESET}")
+        # get_headers(domain)
     except KeyboardInterrupt:
         quit("-- Exited --")
 
@@ -254,4 +285,4 @@ if __name__ == "__main__":
         print(f"\n{tc.CYAN}Gathering subdomains...{tc.RESET}")
         main(domain)
     else:
-        sys.exit(f"{tc.ERROR} {tc.BOLD}'{domain}'{tc.RESET} does not appear to be a valid domain.")  # nopep8
+        sys.exit(f"{tc.ERROR} {tc.BOLD}'{domain}'{tc.RESET} does not appear to be a valid domain.")
