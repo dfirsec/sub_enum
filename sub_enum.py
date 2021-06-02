@@ -2,7 +2,6 @@ import asyncio
 import re
 import sys
 import time
-from pathlib import Path
 from urllib.parse import urlparse
 
 import aiohttp
@@ -60,7 +59,7 @@ def dns_lookup(domain):
     resolver = dns.resolver.Resolver(configure=False)
     resolver.timeout = 2
     resolver.lifetime = 2
-    resolver.nameservers = ["8.8.8.8", "8.8.4.4"]
+    resolver.nameservers = ["1.1.1.1", "8.8.8.8", "8.8.4.4", "9.9.9.9"]  # https://public-dns.info//nameservers.txt
 
     # fallback method if default dns lookup fails
     def fallback():
@@ -104,7 +103,7 @@ def crt_get_subs(domain):
     soup = ""
     try:
         content = connect(url).content
-        soup = BeautifulSoup(content, "html.parser")
+        soup = BeautifulSoup(content, "lxml")
 
         for tr in soup.find_all("tr")[2:]:
             td = tr.find_all("td")
