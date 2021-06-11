@@ -89,7 +89,7 @@ def bufferover_get_subs(domain):
     try:
         if connect(url).json():
             # forward dns = domain to ip
-            fdns = [sub for sub in connect(url).json()["FDNS_A"]]
+            fdns = list(connect(url).json()["FDNS_A"])
             fdns_dom = [sub.split(",")[1] for sub in fdns]
             fdns_ip = [sub.split(",")[0] for sub in fdns]
             fdns_res = dict(zip(fdns_dom, fdns_ip))
@@ -141,7 +141,7 @@ def web_archive(domain):
         print(f"No data available for {domain}")
         pass
     else:
-        lists = [r for r in grab]
+        lists = list(grab)
         subs = [urlparse("".join(result)).netloc.replace(":80", "") for result in lists[1:]]
         for sub in list(set(subs)):
             print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub}{tc.RESET}")
