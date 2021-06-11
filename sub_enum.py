@@ -11,7 +11,7 @@ import requests
 import validators
 from bs4 import BeautifulSoup
 from prettytable import PrettyTable
-from requests.exceptions import ConnectionError, HTTPError, Timeout
+from requests.exceptions import HTTPError, Timeout
 
 from termcolors import Termcolor
 
