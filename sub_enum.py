@@ -39,8 +39,6 @@ def connect(url):
         print(f"{tc.WARNING} Timeout encountered:{tc.RESET} {err}")
     except ConnectionError as err:
         print(f"{tc.WARNING} Connection Error:{tc.RESET} {err}")
-    except Exception as err:
-        sys.exit(f"{tc.WARNING} Issue encountered:{tc.RESET} {err}")
 
 
 async def async_connect(url):
