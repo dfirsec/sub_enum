@@ -83,60 +83,57 @@ def dns_lookup(domain):
 
 def bufferover_get_subs(domain):
     url = f"https://dns.bufferover.run/dns?q=.{domain}"
-    fdns = list(connect(url).json()["FDNS_A"])
-    fdns_dom = [sub.split(",")[1] for sub in fdns]
-    fdns_ip = [sub.split(",")[0] for sub in fdns]
-    fdns_res = dict(zip(fdns_dom, fdns_ip))
-    return fdns_res
+    try:
+        fdns = list(connect(url).json()["FDNS_A"])
+    except TypeError:
+        pass
+    else:
+        fdns_dom = [sub.split(",")[1] for sub in fdns]
+        fdns_ip = [sub.split(",")[0] for sub in fdns]
+        fdns_res = dict(zip(fdns_dom, fdns_ip))
+        return fdns_res
 
 
 def crt_get_subs(domain):
     url = f"https://crt.sh/?q=%25.{domain}"
-    soup = ""
     try:
         content = connect(url).content
-        soup = BeautifulSoup(content, "lxml")
-    except ConnectionError:
+    except AttributeError:
         pass
     else:
+        soup = BeautifulSoup(content, "lxml")
         for tr in soup.find_all("tr")[2:]:
             td = tr.find_all("td")
-            if td and "*" not in td[4].text:
-                yield td[4].get_text(separator=" ").strip("\n")
+            if td and domain in td:
+                yield td[4].get_text(separator=" ").replace("*", "").strip("\n")
 
 
 def certspotter_get_subs(domain):
     url = f"https://api.certspotter.com/v1/issuances?domain={domain}&include_subdomains=true&expand=dns_names&expand=issuer&expand=cert"
+    loop = asyncio.get_event_loop()
+    grab = loop.run_until_complete(async_connect(url))
     try:
-        loop = asyncio.get_event_loop()
-        grab = loop.run_until_complete(async_connect(url))
-    except ConnectionError:
+        lists = [name["dns_names"] for name in grab]
+    except TypeError:
         pass
     else:
-        try:
-            lists = [name["dns_names"] for name in grab]
-        except KeyError:
-            pass
-        else:
-            results = [y for x in lists for y in x]
-            for sub in results:
-                if domain in sub and "*." not in sub:
-                    yield sub
+        results = [y for x in lists for y in x]
+        for sub in results:
+            if domain in sub:
+                yield sub.replace("*.", "")
 
 
 def web_archive(domain):
     url = f"http://web.archive.org/cdx/search/cdx?url={domain}/&matchType=domain&output=json&fl=original&collapse=urlkey&limit=500000"
-    try:
-        loop = asyncio.get_event_loop()
-        grab = loop.run_until_complete(async_connect(url))
-    except ConnectionError:
-        print(f"No data available for {domain}")
-        pass
-    else:
-        lists = list(grab)
+    loop = asyncio.get_event_loop()
+    grab = loop.run_until_complete(async_connect(url))
+    lists = list(grab)
+    if lists:
         subs = [urlparse("".join(result)).netloc.replace(":80", "") for result in lists[1:]]
         for sub in list(set(subs)):
             print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub}{tc.RESET}")
+    else:
+        print(f"No data available for {domain}")
 
 
 def main(domain):
