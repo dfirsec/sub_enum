@@ -86,7 +86,7 @@ def dns_lookup(domain):
 def bufferover_get_subs(domain):
     url = f"https://dns.bufferover.run/dns?q=.{domain}"
     try:
-        connect(url).json()
+        connect(url).json(s)
     except Exception:
         pass
     else:
