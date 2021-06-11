@@ -207,7 +207,7 @@ def main(domain):
         else:
             print(f"No data available for {domain}")
     except KeyboardInterrupt:
-        quit("-- Exited --")
+        sys.exit("-- Exited --")
 
 
 if __name__ == "__main__":
