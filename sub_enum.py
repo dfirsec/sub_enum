@@ -224,10 +224,10 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         sys.exit("sub_enum.py: error: the following arguments are required: domain")
     else:
-        domain = sys.argv[1]
+        dom = sys.argv[1]
 
-    if validators.domain(domain):
+    if validators.domain(dom):
         print(f"\n{tc.CYAN}Gathering subdomains...{tc.RESET}")
-        main(domain)
+        main(dom)
     else:
-        sys.exit(f"{tc.ERROR} {tc.BOLD}'{domain}'{tc.RESET} does not appear to be a valid domain.")
+        sys.exit(f"{tc.ERROR} {tc.BOLD}'{dom}'{tc.RESET} does not appear to be a valid domain.")
