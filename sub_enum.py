@@ -112,7 +112,7 @@ def certspotter_get_subs(domain):
     try:
         loop = asyncio.get_event_loop()
         grab = loop.run_until_complete(async_connect(url))
-    except Exception:
+    except ConnectionError:
         pass
     else:
         try:
