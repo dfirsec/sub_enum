@@ -69,7 +69,7 @@ def dns_lookup(domain):
                 answer = connect(url).json()["Answer"]
                 if re.findall(ipv4, answer[0]["data"]):
                     return answer[0]["data"]
-                elif re.findall(ipv4, answer[1]["data"]):
+                if re.findall(ipv4, answer[1]["data"]):
                     return answer[1]["data"]
             else:
                 return False
