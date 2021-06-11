@@ -98,13 +98,13 @@ def crt_get_subs(domain):
     try:
         content = connect(url).content
         soup = BeautifulSoup(content, "lxml")
-
+    except ConnectionError:
+        pass
+    else:
         for tr in soup.find_all("tr")[2:]:
             td = tr.find_all("td")
-            if "*" not in td[4].text:
+            if td and "*" not in td[4].text:
                 yield td[4].get_text(separator=" ").strip("\n")
-    except Exception:
-        pass
 
 
 def certspotter_get_subs(domain):
