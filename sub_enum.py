@@ -131,7 +131,7 @@ def web_archive(domain):
     try:
         loop = asyncio.get_event_loop()
         grab = loop.run_until_complete(async_connect(url))
-    except Exception:
+    except ConnectionError:
         print(f"No data available for {domain}")
         pass
     else:
