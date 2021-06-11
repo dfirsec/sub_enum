@@ -85,17 +85,16 @@ def dns_lookup(domain):
 
 def bufferover_get_subs(domain):
     url = f"https://dns.bufferover.run/dns?q=.{domain}"
-    global fdns_res
     try:
-        if connect(url).json():
-            # forward dns = domain to ip
-            fdns = list(connect(url).json()["FDNS_A"])
-            fdns_dom = [sub.split(",")[1] for sub in fdns]
-            fdns_ip = [sub.split(",")[0] for sub in fdns]
-            fdns_res = dict(zip(fdns_dom, fdns_ip))
-        return fdns_res
+        connect(url).json()
     except Exception:
         pass
+    else:
+        fdns = list(connect(url).json()["FDNS_A"])
+        fdns_dom = [sub.split(",")[1] for sub in fdns]
+        fdns_ip = [sub.split(",")[0] for sub in fdns]
+        fdns_res = dict(zip(fdns_dom, fdns_ip))
+        return fdns_res
 
 
 def crt_get_subs(domain):
