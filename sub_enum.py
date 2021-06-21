@@ -27,9 +27,10 @@ ipv4 = re.compile(r"(?![0])\d{1,}\.\d{1,3}\.\d{1,3}\.(?![0])\d{1,3}")
 
 
 def connect(url):
+    session = requests.Session()
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"}
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"}
-        resp = requests.get(url, timeout=5, headers=headers)
+        resp = session.get(url, timeout=5, headers=headers)
         resp.raise_for_status()
         if resp.status_code == 200:
             return resp
