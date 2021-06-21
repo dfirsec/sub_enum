@@ -28,7 +28,9 @@ ipv4 = re.compile(r"(?![0])\d{1,}\.\d{1,3}\.\d{1,3}\.(?![0])\d{1,3}")
 
 def connect(url):
     session = requests.Session()
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"
+    }
     try:
         resp = session.get(url, timeout=5, headers=headers)
         resp.raise_for_status()
@@ -43,7 +45,9 @@ def connect(url):
 
 
 async def async_connect(url):
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"
+    }
     async with aiohttp.ClientSession(headers=headers) as session:
         try:
             async with session.get(url) as resp:
@@ -58,7 +62,12 @@ def dns_lookup(domain):
     resolver = dns.resolver.Resolver(configure=False)
     resolver.timeout = 2
     resolver.lifetime = 2
-    resolver.nameservers = ["1.1.1.1", "8.8.8.8", "8.8.4.4", "9.9.9.9"]  # https://public-dns.info//nameservers.txt
+    resolver.nameservers = [
+        "1.1.1.1",
+        "8.8.8.8",
+        "8.8.4.4",
+        "9.9.9.9",
+    ]  # https://public-dns.info//nameservers.txt
 
     # fallback method if default dns lookup fails
     def fallback():
@@ -78,7 +87,12 @@ def dns_lookup(domain):
     try:
         answer = resolver.resolve(domain, "A")
         return answer[0]
-    except (dns.resolver.NoAnswer, dns.exception.Timeout, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
+    except (
+        dns.resolver.NoAnswer,
+        dns.exception.Timeout,
+        dns.resolver.NXDOMAIN,
+        dns.resolver.NoNameservers,
+    ):
         return fallback()
 
 
@@ -130,7 +144,9 @@ def web_archive(domain):
     grab = loop.run_until_complete(async_connect(url))
     lists = list(grab)
     if lists:
-        subs = [urlparse("".join(result)).netloc.replace(":80", "") for result in lists[1:]]
+        subs = [
+            urlparse("".join(result)).netloc.replace(":80", "") for result in lists[1:]
+        ]
         for sub in list(set(subs)):
             print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub}{tc.RESET}")
     else:
@@ -150,7 +166,10 @@ def main(domain):
 
     print(f"{tc.YELLOW}[ Quick Results -- bufferover.run ]{tc.RESET}")
     try:
-        [print(f"{sub:45}: {ip}") for (sub, ip) in sorted(bufferover_get_subs(domain).items())]
+        [
+            print(f"{sub:45}: {ip}")
+            for (sub, ip) in sorted(bufferover_get_subs(domain).items())
+        ]
         for sub, _ in bufferover_get_subs(domain).items():
             subs.append(sub)
     except AttributeError:
@@ -178,7 +197,9 @@ def main(domain):
                 ip = ""
                 if dns_lookup(sub) is None:
                     if time.time() - start_time > 2:
-                        print(f"{tc.WARNING}  DNS lookup taking longer than expected...trying dns.google.com")
+                        print(
+                            f"{tc.WARNING}  DNS lookup taking longer than expected...trying dns.google.com"
+                        )
                         try:
                             ip = dns_lookup(domain).fallback()
                         except AttributeError:
@@ -220,4 +241,6 @@ if __name__ == "__main__":
         print(f"\n{tc.CYAN}Gathering subdomains...{tc.RESET}")
         main(dom)
     else:
-        sys.exit(f"{tc.ERROR} {tc.BOLD}'{dom}'{tc.RESET} does not appear to be a valid domain.")
+        sys.exit(
+            f"{tc.ERROR} {tc.BOLD}'{dom}'{tc.RESET} does not appear to be a valid domain."
+        )
