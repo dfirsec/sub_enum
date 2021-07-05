@@ -22,8 +22,8 @@ __version__ = "0.0.5"
 __description__ = "Script to retrieve subdomains from given domain."
 
 # regexes
-email = r"(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]{2,5}$)"
-ipv4 = re.compile(r"(?![0])\d{1,}\.\d{1,3}\.\d{1,3}\.(?![0])\d{1,3}")
+EMAIL = r"(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]{2,5}$)"
+IPV4 = re.compile(r"(?![0])\d{1,}\.\d{1,3}\.\d{1,3}\.(?![0])\d{1,3}")
 
 
 def connect(url):
@@ -50,8 +50,8 @@ async def async_connect(url):
                 if resp.status == 200:
                     results = await resp.json()
                     return results
-        except aiohttp.ClientConnectorError as e:
-            print("Connection Error:", str(e))
+        except aiohttp.ClientConnectorError as error:
+            print("Connection Error:", str(error))
 
 
 def dns_lookup(domain):
@@ -66,9 +66,9 @@ def dns_lookup(domain):
         try:
             if connect(url).json()["Answer"]:
                 answer = connect(url).json()["Answer"]
-                if re.findall(ipv4, answer[0]["data"]):
+                if re.findall(IPV4, answer[0]["data"]):
                     return answer[0]["data"]
-                if re.findall(ipv4, answer[1]["data"]):
+                if re.findall(IPV4, answer[1]["data"]):
                     return answer[1]["data"]
             else:
                 return False
@@ -103,16 +103,17 @@ def crt_get_subs(domain):
         pass
     else:
         soup = BeautifulSoup(content, "lxml")
-        for tr in soup.find_all("tr")[2:]:
-            td = tr.find_all("td")
-            if td and domain in td:
-                yield td[4].get_text(separator=" ").replace("*", "").strip("\n")
+        for row in soup.find_all("tr")[2:]:
+            data = row.find_all("td")
+            if data and domain in data:
+                yield data[4].get_text(separator=" ").replace("*", "").strip("\n")
 
 
 def certspotter_get_subs(domain):
-    url = f"https://api.certspotter.com/v1/issuances?domain={domain}&include_subdomains=true&expand=dns_names&expand=issuer&expand=cert"
+    url = "https://api.certspotter.com/v1/issuances?domain="
+    results = f"{url}{domain}&include_subdomains=true&expand=dns_names&expand=issuer&expand=cert"
     loop = asyncio.get_event_loop()
-    grab = loop.run_until_complete(async_connect(url))
+    grab = loop.run_until_complete(async_connect(results))
     try:
         lists = [name["dns_names"] for name in grab]
     except TypeError:
@@ -125,9 +126,10 @@ def certspotter_get_subs(domain):
 
 
 def web_archive(domain):
-    url = f"http://web.archive.org/cdx/search/cdx?url={domain}/&matchType=domain&output=json&fl=original&collapse=urlkey&limit=500000"
+    url = "http://web.archive.org/cdx/search/cdx?url="
+    results = f"{url}{domain}/&matchType=domain&output=json&fl=original&collapse=urlkey&limit=500000"
     loop = asyncio.get_event_loop()
-    grab = loop.run_until_complete(async_connect(url))
+    grab = loop.run_until_complete(async_connect(results))
     lists = list(grab)
     if lists:
         subs = [urlparse("".join(result)).netloc.replace(":80", "") for result in lists[1:]]
@@ -138,19 +140,20 @@ def web_archive(domain):
 
 
 def main(domain):
-    x = PrettyTable()
-    x.field_names = ["Subdomain", "Domain", "Resolved"]
-    x.align["Subdomain"] = "r"
-    x.align["Domain"] = "l"
-    x.align["Resolved"] = "l"
-    x.sortby = "Subdomain"
+    ptable = PrettyTable()
+    ptable.field_names = ["Subdomain", "Domain", "Resolved"]
+    ptable.align["Subdomain"] = "r"
+    ptable.align["Domain"] = "l"
+    ptable.align["Resolved"] = "l"
+    ptable.sortby = "Subdomain"
 
     # subdomain lookup container
     subs = []
 
     print(f"{tc.YELLOW}[ Quick Results -- bufferover.run ]{tc.RESET}")
     try:
-        [print(f"{sub:45}: {ip}") for (sub, ip) in sorted(bufferover_get_subs(domain).items())]
+        for sub, result in list(sorted(bufferover_get_subs(domain).items())):
+            print(f"{sub:45}: {result}")
         for sub, _ in bufferover_get_subs(domain).items():
             subs.append(sub)
     except AttributeError:
@@ -172,28 +175,28 @@ def main(domain):
 
         subset = set(subs)
         for sub in subset:
-            if sub != domain and not re.search(email, sub):
+            if sub != domain and not re.search(EMAIL, sub):
                 print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub.lower()}{tc.RESET}")
                 start_time = time.time()
-                ip = ""
+                ip_addr = ""
                 if dns_lookup(sub) is None:
                     if time.time() - start_time > 2:
                         print(f"{tc.WARNING}  DNS lookup taking longer than expected...trying dns.google.com")
                         try:
-                            ip = dns_lookup(domain).fallback()
+                            ip_addr = dns_lookup(domain).fallback()
                         except AttributeError:
                             pass
                     else:
-                        ip = f"{tc.GRAY}{dns_lookup(sub)}{tc.RESET}"
+                        ip_addr = f"{tc.GRAY}{dns_lookup(sub)}{tc.RESET}"
                 else:
-                    ip = dns_lookup(sub)
+                    ip_addr = dns_lookup(sub)
 
                 root = sub.split(domain)
                 subdomain = f"{tc.BOLD}{''.join(root).lower()}{tc.RESET}"
-                x.add_row([subdomain, domain, str(ip)])
+                ptable.add_row([subdomain, domain, str(ip_addr)])
         # check if rows contain data
-        if x._rows:
-            print(f"\n{x}")
+        if ptable._rows:
+            print(f"\n{ptable}")
         else:
             print(f"No data available for {domain}")
     except KeyboardInterrupt:
