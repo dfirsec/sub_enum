@@ -23,7 +23,12 @@ __description__ = "Script to retrieve subdomains from given domain."
 
 # regexes
 EMAIL = r"(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]{2,5}$)"
-IPV4 = re.compile(r"(?![0])\d{1,}\.\d{1,3}\.\d{1,3}\.(?![0])\d{1,3}")
+IPV4 = re.compile(r"(?![0])\d+\.\d{1,3}\.\d{1,3}\.(?![0])\d{1,3}")
+
+# filter out deprecation warnings
+if not sys.warnoptions:
+    import warnings
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
 def connect(url):
