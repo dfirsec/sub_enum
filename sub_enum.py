@@ -45,6 +45,7 @@ def connect(url):
         print(f"{tc.WARNING} Timeout encountered:{tc.RESET} {err}")
     except ConnectionError as err:
         print(f"{tc.WARNING} Connection Error:{tc.RESET} {err}")
+    return None
 
 
 async def async_connect(url):
@@ -98,6 +99,7 @@ def bufferover_get_subs(domain):
         fdns_ip = [sub.split(",")[0] for sub in fdns]
         fdns_res = dict(zip(fdns_dom, fdns_ip))
         return fdns_res
+    return None
 
 
 def crt_get_subs(domain):
