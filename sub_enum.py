@@ -5,11 +5,9 @@ import time
 from urllib.parse import urlparse
 
 import aiohttp
-import dns.exception
-import dns.resolver
 import requests
-import validators
 from bs4 import BeautifulSoup
+from dns import exception, resolver
 from prettytable import PrettyTable
 from requests.exceptions import HTTPError, Timeout
 
@@ -24,11 +22,24 @@ __description__ = "Script to retrieve subdomains from given domain."
 # regexes
 EMAIL = r"(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]{2,5}$)"
 IPV4 = re.compile(r"(?![0])\d+\.\d{1,3}\.\d{1,3}\.(?![0])\d{1,3}")
+DOMAIN = r"([A-Za-z0-9]+(?:[\-|\.|][A-Za-z0-9]+)*(?<!fireeye)(?:\[\.\]|\.)(?![a-z-]*.[i\.e]$|[e\.g]$)(?:[a-z]{2,4})\b|(?:\[\.\][a-z]{2,4})(?!@)$)"
 
 # filter out deprecation warnings
 if not sys.warnoptions:
     import warnings
+
     warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+
+def valid_domain(domain: str) -> bool:
+    pattern = re.compile(DOMAIN)
+
+    if domain is None:
+        return False
+
+    if re.search(pattern, domain):
+        return True
+    return False
 
 
 def connect(url):
@@ -37,14 +48,15 @@ def connect(url):
     try:
         resp = session.get(url, timeout=5, headers=headers)
         resp.raise_for_status()
-        if resp.status_code == 200:
-            return resp
     except HTTPError as err:
         print(f"{tc.WARNING} HTTP Error:{tc.RESET} {err}")
     except Timeout as err:
         print(f"{tc.WARNING} Timeout encountered:{tc.RESET} {err}")
     except ConnectionError as err:
         print(f"{tc.WARNING} Connection Error:{tc.RESET} {err}")
+    else:
+        if resp.status_code == 200:
+            return resp
     return None
 
 
@@ -57,55 +69,54 @@ async def async_connect(url):
                     results = await resp.json()
                     return results
         except aiohttp.ClientConnectorError as error:
-            print("Connection Error:", str(error))
+            print("Connection Error:", error)
 
 
 def dns_lookup(domain):
-    resolver = dns.resolver.Resolver(configure=False)
-    resolver.timeout = 2
-    resolver.lifetime = 2
-    resolver.nameservers = ["1.1.1.1", "8.8.8.8", "8.8.4.4", "9.9.9.9"]  # https://public-dns.info//nameservers.txt
+    resolve = resolver.Resolver(configure=False)
+    resolve.timeout = 2  # type: ignore
+    resolve.lifetime = 2  # type: ignore
+    resolve.nameservers = ["1.1.1.1", "8.8.8.8", "9.9.9.9"]  # https://public-dns.info//nameservers.txt
 
-    # fallback method if default dns lookup fails
     def fallback():
+        """fallback method if default dns lookup fails."""
         url = f"https://dns.google.com/resolve?name={domain}&type=A"
         try:
-            if connect(url).json()["Answer"]:
-                answer = connect(url).json()["Answer"]
-                if re.findall(IPV4, answer[0]["data"]):
-                    return answer[0]["data"]
-                if re.findall(IPV4, answer[1]["data"]):
-                    return answer[1]["data"]
-            else:
+            if not connect(url).json()["Answer"]:
                 return False
+            answer = connect(url).json()["Answer"]  # type: ignore
+            if re.findall(IPV4, answer[0]["data"]):
+                return answer[0]["data"]
+            if re.findall(IPV4, answer[1]["data"]):
+                return answer[1]["data"]
         except (KeyError, IndexError):
             pass
+        return None
 
     try:
         answer = resolver.resolve(domain, "A")
         return answer[0]
-    except (dns.resolver.NoAnswer, dns.exception.Timeout, dns.resolver.NXDOMAIN, dns.resolver.NoNameservers):
+    except (resolver.NoAnswer, exception.Timeout, resolver.NXDOMAIN, resolver.NoNameservers):
         return fallback()
 
 
 def bufferover_get_subs(domain):
     url = f"https://dns.bufferover.run/dns?q=.{domain}"
     try:
-        fdns = list(connect(url).json()["FDNS_A"])
+        fdns = list(connect(url).json()["FDNS_A"]) # type: ignore
     except TypeError:
         pass
     else:
         fdns_dom = [sub.split(",")[1] for sub in fdns]
         fdns_ip = [sub.split(",")[0] for sub in fdns]
-        fdns_res = dict(zip(fdns_dom, fdns_ip))
-        return fdns_res
+        return dict(zip(fdns_dom, fdns_ip))
     return None
 
 
 def crt_get_subs(domain):
     url = f"https://crt.sh/?q=%25.{domain}"
     try:
-        content = connect(url).content
+        content = connect(url).content  # type: ignore
     except AttributeError:
         pass
     else:
@@ -122,7 +133,7 @@ def certspotter_get_subs(domain):
     loop = asyncio.get_event_loop()
     grab = loop.run_until_complete(async_connect(results))
     try:
-        lists = [name["dns_names"] for name in grab]
+        lists = [name["dns_names"] for name in grab]  # type: ignore
     except TypeError:
         pass
     else:
@@ -137,16 +148,17 @@ def web_archive(domain):
     results = f"{url}{domain}/&matchType=domain&output=json&fl=original&collapse=urlkey&limit=500000"
     loop = asyncio.get_event_loop()
     grab = loop.run_until_complete(async_connect(results))
-    lists = list(grab)
-    if lists:
+    try:
+        lists = list(grab)  # type: ignore
+    except TypeError:
+        print(f"No data available for {domain}")
+    else:
         subs = [urlparse("".join(result)).netloc.replace(":80", "") for result in lists[1:]]
         for sub in list(set(subs)):
             print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub}{tc.RESET}")
-    else:
-        print(f"No data available for {domain}")
 
 
-def main(domain):
+def main(domain):  # sourcery no-metrics
     ptable = PrettyTable()
     ptable.field_names = ["Subdomain", "Domain", "Resolved"]
     ptable.align["Subdomain"] = "r"
@@ -159,10 +171,9 @@ def main(domain):
 
     print(f"{tc.YELLOW}[ Quick Results -- bufferover.run ]{tc.RESET}")
     try:
-        for sub, result in list(sorted(bufferover_get_subs(domain).items())):
+        for sub, result in list(sorted(bufferover_get_subs(domain).items())):  # type: ignore
             print(f"{sub:45}: {result}")
-        for sub, _ in bufferover_get_subs(domain).items():
-            subs.append(sub)
+        subs.extend(sub for sub, _ in bufferover_get_subs(domain).items())
     except AttributeError:
         print(f"No data available for {domain}")
 
@@ -172,11 +183,9 @@ def main(domain):
     print(f"\n{tc.YELLOW}[ Performing Lookups -- takes a little longer ]{tc.RESET}")
     try:
         for sub in crt_get_subs(domain):
-            for item in sub.split(" "):
-                subs.append(item)
+            subs.extend(iter(sub.split(" ")))
         if certspotter_get_subs(domain):
-            for sub in set(certspotter_get_subs(domain)):
-                subs.append(sub)
+            subs.extend(iter(set(certspotter_get_subs(domain))))
         else:
             print(f"{tc.WARNING}  Certspotter might be throttling us...")
 
@@ -190,7 +199,7 @@ def main(domain):
                     if time.time() - start_time > 2:
                         print(f"{tc.WARNING}  DNS lookup taking longer than expected...trying dns.google.com")
                         try:
-                            ip_addr = dns_lookup(domain).fallback()
+                            ip_addr = dns_lookup(domain).fallback()  # type: ignore
                         except AttributeError:
                             pass
                     else:
@@ -226,7 +235,7 @@ if __name__ == "__main__":
     else:
         dom = sys.argv[1]
 
-    if validators.domain(dom):
+    if valid_domain(dom):
         print(f"\n{tc.CYAN}Gathering subdomains...{tc.RESET}")
         main(dom)
     else:

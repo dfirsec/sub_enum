@@ -1,11 +1,7 @@
-aiodns
 aiohttp
-brotlipy
-bs4
-cchardet
+beautifulsoup4
 colorama
 dnspython
-IPy
 lxml
 prettytable
 requests
