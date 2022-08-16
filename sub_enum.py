@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import re
 import sys
 import time
@@ -34,12 +35,7 @@ if not sys.warnoptions:
 def valid_domain(domain: str) -> bool:
     pattern = re.compile(DOMAIN)
 
-    if domain is None:
-        return False
-
-    if re.search(pattern, domain):
-        return True
-    return False
+    return False if domain is None else bool(re.search(pattern, domain))
 
 
 def connect(url):
@@ -76,36 +72,45 @@ def dns_lookup(domain):
     resolve = resolver.Resolver(configure=False)
     resolve.timeout = 2  # type: ignore
     resolve.lifetime = 2  # type: ignore
-    resolve.nameservers = ["1.1.1.1", "8.8.8.8", "9.9.9.9"]  # https://public-dns.info//nameservers.txt
+    resolve.nameservers = [
+        "1.1.1.1",
+        "8.8.8.8",
+        "9.9.9.9",
+    ]  # https://public-dns.info//nameservers.txt
 
     def fallback():
         """fallback method if default dns lookup fails."""
         url = f"https://dns.google.com/resolve?name={domain}&type=A"
-        try:
-            if not connect(url).json()["Answer"]:
+        with contextlib.suppress(KeyError, IndexError):
+            if not connect(url).json()["Answer"]:  # type: ignore
                 return False
             answer = connect(url).json()["Answer"]  # type: ignore
             if re.findall(IPV4, answer[0]["data"]):
                 return answer[0]["data"]
             if re.findall(IPV4, answer[1]["data"]):
                 return answer[1]["data"]
-        except (KeyError, IndexError):
-            pass
         return None
 
     try:
         answer = resolver.resolve(domain, "A")
         return answer[0]
-    except (resolver.NoAnswer, exception.Timeout, resolver.NXDOMAIN, resolver.NoNameservers):
+    except (
+        resolver.NoAnswer,
+        exception.Timeout,
+        resolver.NXDOMAIN,
+        resolver.NoNameservers,
+    ):
         return fallback()
 
 
 def bufferover_get_subs(domain):
     url = f"https://dns.bufferover.run/dns?q=.{domain}"
     try:
-        fdns = list(connect(url).json()["FDNS_A"]) # type: ignore
+        fdns = list(connect(url).json()["FDNS_A"])  # type: ignore
     except TypeError:
         pass
+    except Exception as err:
+        print(f"{tc.WARNING} Error:{tc.RESET} {err}")
     else:
         fdns_dom = [sub.split(",")[1] for sub in fdns]
         fdns_ip = [sub.split(",")[0] for sub in fdns]
@@ -173,7 +178,7 @@ def main(domain):  # sourcery no-metrics
     try:
         for sub, result in list(sorted(bufferover_get_subs(domain).items())):  # type: ignore
             print(f"{sub:45}: {result}")
-        subs.extend(sub for sub, _ in bufferover_get_subs(domain).items())
+        subs.extend(sub for sub, _ in bufferover_get_subs(domain).items())  # type: ignore
     except AttributeError:
         print(f"No data available for {domain}")
 
@@ -198,10 +203,9 @@ def main(domain):  # sourcery no-metrics
                 if dns_lookup(sub) is None:
                     if time.time() - start_time > 2:
                         print(f"{tc.WARNING}  DNS lookup taking longer than expected...trying dns.google.com")
-                        try:
+                        with contextlib.suppress(AttributeError):
                             ip_addr = dns_lookup(domain).fallback()  # type: ignore
-                        except AttributeError:
-                            pass
+
                     else:
                         ip_addr = f"{tc.GRAY}{dns_lookup(sub)}{tc.RESET}"
                 else:
