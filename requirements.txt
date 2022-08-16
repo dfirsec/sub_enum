@@ -1,8 +1,0 @@
-aiohttp
-beautifulsoup4
-colorama
-dnspython
-lxml
-prettytable
-requests
-validators
