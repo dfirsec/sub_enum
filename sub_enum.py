@@ -17,7 +17,7 @@ from termcolors import Termcolor
 tc = Termcolor()
 
 __author__ = "DFIRSec (@pulsecode)"
-__version__ = "0.0.5"
+__version__ = "0.0.6"
 __description__ = "Script to retrieve subdomains from given domain."
 
 # regexes
@@ -34,7 +34,6 @@ if not sys.warnoptions:
 
 def valid_domain(domain: str) -> bool:
     pattern = re.compile(DOMAIN)
-
     return False if domain is None else bool(re.search(pattern, domain))
 
 
@@ -105,26 +104,17 @@ def dns_lookup(domain):
 
 def bufferover_get_subs(domain):
     url = f"https://dns.bufferover.run/dns?q=.{domain}"
-    try:
+    with contextlib.suppress(Exception):
         fdns = list(connect(url).json()["FDNS_A"])  # type: ignore
-    except TypeError:
-        pass
-    except Exception as err:
-        print(f"{tc.WARNING} Error:{tc.RESET} {err}")
-    else:
         fdns_dom = [sub.split(",")[1] for sub in fdns]
         fdns_ip = [sub.split(",")[0] for sub in fdns]
         return dict(zip(fdns_dom, fdns_ip))
-    return None
 
 
 def crt_get_subs(domain):
     url = f"https://crt.sh/?q=%25.{domain}"
-    try:
+    with contextlib.suppress(Exception):
         content = connect(url).content  # type: ignore
-    except AttributeError:
-        pass
-    else:
         soup = BeautifulSoup(content, "lxml")
         for row in soup.find_all("tr")[2:]:
             data = row.find_all("td")
@@ -137,11 +127,8 @@ def certspotter_get_subs(domain):
     results = f"{url}{domain}&include_subdomains=true&expand=dns_names&expand=issuer&expand=cert"
     loop = asyncio.get_event_loop()
     grab = loop.run_until_complete(async_connect(results))
-    try:
+    with contextlib.suppress(Exception):
         lists = [name["dns_names"] for name in grab]  # type: ignore
-    except TypeError:
-        pass
-    else:
         results = [y for x in lists for y in x]
         for sub in results:
             if domain in sub:
@@ -189,10 +176,12 @@ def main(domain):  # sourcery no-metrics
     try:
         for sub in crt_get_subs(domain):
             subs.extend(iter(sub.split(" ")))
-        if certspotter_get_subs(domain):
-            subs.extend(iter(set(certspotter_get_subs(domain))))
-        else:
-            print(f"{tc.WARNING}  Certspotter might be throttling us...")
+
+        # if certspotter_get_subs(domain):
+            # subs.extend(iter(set(certspotter_get_subs(domain))))
+        # else:
+        #     print(f"{tc.WARNING}  Certspotter might be throttling us...")
+        subs.extend(iter(set(certspotter_get_subs(domain))))
 
         subset = set(subs)
         for sub in subset:
