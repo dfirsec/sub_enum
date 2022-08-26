@@ -1,8 +1,9 @@
 [tool.poetry]
 name = "sub_enum"
-version = "0.0.5"
+version = "0.0.6"
 description = "Script to retrieve subdomains from given domain"
 authors = ["Mitch Haddadi <12067255+dfirsec@users.noreply.github.com>"]
+license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^3.10"
