@@ -104,15 +104,6 @@ def dns_lookup(domain):
         pass
 
 
-def bufferover_get_subs(domain):
-    url = f"https://dns.bufferover.run/dns?q=.{domain}"
-    with contextlib.suppress(Exception):
-        fdns = list(connect(url).json()["FDNS_A"])  # type: ignore
-        fdns_dom = [sub.split(",")[1] for sub in fdns]
-        fdns_ip = [sub.split(",")[0] for sub in fdns]
-        return dict(zip(fdns_dom, fdns_ip))
-
-
 def crt_get_subs(domain):
     url = f"https://crt.sh/?q={domain}"
     with contextlib.suppress(Exception):
@@ -132,7 +123,7 @@ def certspotter_get_subs(domain):
     grab = loop.run_until_complete(async_connect(results))
     with contextlib.suppress(Exception):
         lists = [name["dns_names"] for name in grab]  # type: ignore
-        results = [y for x in lists for y in x]
+        results = [y for x in lists for y in x] # combine lists
         for sub in results:
             if domain in sub:
                 yield sub.replace("*.", "")
@@ -151,7 +142,6 @@ def web_archive(domain):
     else:
         subs = [urlparse("".join(result)).netloc.replace(":80", "") for result in lists[1:]]
         yield from list(set(subs))
-        # print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub}{tc.RESET}")
 
 
 def main(domain):
@@ -163,14 +153,6 @@ def main(domain):
     ptable.sortby = "Subdomain"
 
     subs = []
-
-    print(f"{tc.YELLOW}[ Quick Results -- bufferover.run ]{tc.RESET}")
-    try:
-        for sub, result in list(sorted(bufferover_get_subs(domain).items())):  # type: ignore
-            print(f"{sub:45}: {result}")
-        subs.extend(sub for sub, _ in bufferover_get_subs(domain).items())  # type: ignore
-    except AttributeError:
-        print(f"No data available for {domain}")
 
     print(f"\n{tc.YELLOW}[ Trying Web Archive -- archive.org ]{tc.RESET}")
     for sub in web_archive(domain):
@@ -234,6 +216,9 @@ if __name__ == "__main__":
 
     if valid_domain(DOM):
         print(f"\n{tc.CYAN}Gathering subdomains...{tc.RESET}")
-        main(DOM)
+        try:
+            main(DOM)
+        except KeyboardInterrupt:
+            sys.exit("-- Exited --")
     else:
         sys.exit(f"{tc.ERROR} {tc.BOLD}'{DOM}'{tc.RESET} does not appear to be a valid domain.")
