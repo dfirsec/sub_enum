@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sub_enum"
-version = "0.0.6"
+version = "0.0.7"
 description = "Script to retrieve subdomains from given domain"
 authors = ["Mitch Haddadi <12067255+dfirsec@users.noreply.github.com>"]
 license = "MIT"
