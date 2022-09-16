@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 import aiohttp
 import requests
 from bs4 import BeautifulSoup
-from dns import exception, resolver
+from dns import exception, resolver, name
 from prettytable import PrettyTable
 from requests.exceptions import HTTPError, Timeout
 
@@ -100,6 +100,8 @@ def dns_lookup(domain):
         resolver.NoNameservers,
     ):
         return fallback()
+    except (name.NameTooLong, name.LabelTooLong):
+        pass
 
 
 def bufferover_get_subs(domain):
@@ -138,19 +140,20 @@ def certspotter_get_subs(domain):
 def web_archive(domain):
     url = "http://web.archive.org/cdx/search/cdx?url="
     results = f"{url}{domain}/&matchType=domain&output=json&fl=original&collapse=urlkey&limit=500000"
+
     loop = asyncio.get_event_loop()
     grab = loop.run_until_complete(async_connect(results))
     try:
-        lists = list(grab)  # type: ignore
+        lists = list(grab) # type: ignore
     except TypeError:
         print(f"No data available for {domain}")
     else:
         subs = [urlparse("".join(result)).netloc.replace(":80", "") for result in lists[1:]]
-        for sub in list(set(subs)):
-            print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub}{tc.RESET}")
+        yield from list(set(subs))
+            # print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub}{tc.RESET}")
 
 
-def main(domain):  # sourcery no-metrics
+def main(domain):
     ptable = PrettyTable()
     ptable.field_names = ["Subdomain", "Domain", "Resolved"]
     ptable.align["Subdomain"] = "r"
@@ -158,7 +161,6 @@ def main(domain):  # sourcery no-metrics
     ptable.align["Resolved"] = "l"
     ptable.sortby = "Subdomain"
 
-    # subdomain lookup container
     subs = []
 
     print(f"{tc.YELLOW}[ Quick Results -- bufferover.run ]{tc.RESET}")
@@ -170,18 +172,19 @@ def main(domain):  # sourcery no-metrics
         print(f"No data available for {domain}")
 
     print(f"\n{tc.YELLOW}[ Trying Web Archive -- archive.org ]{tc.RESET}")
-    web_archive(domain)
+    for sub in web_archive(domain):
+        subs.append(sub)
+        print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub}{tc.RESET}")
 
     print(f"\n{tc.YELLOW}[ Performing Lookups -- takes a little longer ]{tc.RESET}")
     try:
         for sub in crt_get_subs(domain):
             subs.extend(iter(sub.split(" ")))
 
-        # if certspotter_get_subs(domain):
-            # subs.extend(iter(set(certspotter_get_subs(domain))))
-        # else:
-        #     print(f"{tc.WARNING}  Certspotter might be throttling us...")
-        subs.extend(iter(set(certspotter_get_subs(domain))))
+        if certspotter_get_subs(domain):
+            subs.extend(iter(set(certspotter_get_subs(domain))))
+        else:
+            print(f"{tc.WARNING}  Certspotter might be throttling us...")
 
         subset = set(subs)
         for sub in subset:
@@ -203,7 +206,7 @@ def main(domain):  # sourcery no-metrics
                 root = sub.split(domain)
                 subdomain = f"{tc.BOLD}{''.join(root).lower()}{tc.RESET}"
                 ptable.add_row([subdomain, domain, str(ip_addr)])
-        # check if rows contain data
+
         if ptable._rows:
             print(f"\n{ptable}")
         else:
