@@ -17,13 +17,13 @@ from termcolors import Termcolor
 tc = Termcolor()
 
 __author__ = "DFIRSec (@pulsecode)"
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 __description__ = "Script to retrieve subdomains from given domain."
 
 # regexes
 EMAIL = r"(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]{2,5}$)"
 IPV4 = re.compile(r"(?![0])\d+\.\d{1,3}\.\d{1,3}\.(?![0])\d{1,3}")
-DOMAIN = r"([A-Za-z0-9]+(?:[\-|\.|][A-Za-z0-9]+)*(?<!fireeye)(?:\[\.\]|\.)(?![a-z-]*.[i\.e]$|[e\.g]$)(?:[a-z]{2,4})\b|(?:\[\.\][a-z]{2,4})(?!@)$)"
+DOMAIN = r"([^\\n|\W|:|\.][A-Za-z0-9]+(?:[\-|\.|][A-Za-z0-9]+)*(?:\[\.\]|\.)(?![a-z-]*.[i\.e]$|[e\.g]$)(?:[a-z]{2,4})\b|(?:\[\.\][a-z]{2,4})(?!@)$)"
 
 # filter out deprecation warnings
 if not sys.warnoptions:
@@ -41,7 +41,7 @@ def connect(url):
     session = requests.Session()
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"}
     try:
-        resp = session.get(url, timeout=5, headers=headers)
+        resp = session.get(url, timeout=10, headers=headers)
         resp.raise_for_status()
     except HTTPError as err:
         print(f"{tc.WARNING} HTTP Error:{tc.RESET} {err}")
@@ -100,7 +100,7 @@ def dns_lookup(domain):
         resolver.NoNameservers,
     ):
         return fallback()
-    except (name.NameTooLong, name.LabelTooLong):
+    except (name.NameTooLong, name.LabelTooLong, name.EmptyLabel):
         pass
 
 
@@ -114,14 +114,15 @@ def bufferover_get_subs(domain):
 
 
 def crt_get_subs(domain):
-    url = f"https://crt.sh/?q=%25.{domain}"
+    url = f"https://crt.sh/?q={domain}"
     with contextlib.suppress(Exception):
         content = connect(url).content  # type: ignore
         soup = BeautifulSoup(content, "lxml")
-        for row in soup.find_all("tr")[2:]:
-            data = row.find_all("td")
-            if data and domain in data:
-                yield data[4].get_text(separator=" ").replace("*", "").strip("\n")
+        table = soup.select("table")[1]
+        for row in table.find_all("tr")[1:]:
+            cols = row.find_all("td")
+            if len(cols) > 1:
+                yield cols[4].text.replace("*", "").strip(".*")
 
 
 def certspotter_get_subs(domain):
@@ -144,13 +145,13 @@ def web_archive(domain):
     loop = asyncio.get_event_loop()
     grab = loop.run_until_complete(async_connect(results))
     try:
-        lists = list(grab) # type: ignore
+        lists = list(grab)  # type: ignore
     except TypeError:
         print(f"No data available for {domain}")
     else:
         subs = [urlparse("".join(result)).netloc.replace(":80", "") for result in lists[1:]]
         yield from list(set(subs))
-            # print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub}{tc.RESET}")
+        # print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub}{tc.RESET}")
 
 
 def main(domain):
@@ -229,10 +230,10 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         sys.exit("sub_enum.py: error: the following arguments are required: domain")
     else:
-        dom = sys.argv[1]
+        DOM = sys.argv[1]
 
-    if valid_domain(dom):
+    if valid_domain(DOM):
         print(f"\n{tc.CYAN}Gathering subdomains...{tc.RESET}")
-        main(dom)
+        main(DOM)
     else:
-        sys.exit(f"{tc.ERROR} {tc.BOLD}'{dom}'{tc.RESET} does not appear to be a valid domain.")
+        sys.exit(f"{tc.ERROR} {tc.BOLD}'{DOM}'{tc.RESET} does not appear to be a valid domain.")
