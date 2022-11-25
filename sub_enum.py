@@ -3,21 +3,21 @@ import contextlib
 import re
 import sys
 import time
+from typing import Iterable
 from urllib.parse import urlparse
 
 import aiohttp
 import requests
 from bs4 import BeautifulSoup
-from dns import exception, resolver, name
+from dns import exception, name, resolver
 from prettytable import PrettyTable
 from requests.exceptions import HTTPError, Timeout
-
 from termcolors import Termcolor
 
-tc = Termcolor()
+TC = Termcolor()
 
 __author__ = "DFIRSec (@pulsecode)"
-__version__ = "0.0.7"
+__version__ = "0.0.8"
 __description__ = "Script to retrieve subdomains from given domain."
 
 # regexes
@@ -33,41 +33,66 @@ if not sys.warnoptions:
 
 
 def valid_domain(domain: str) -> bool:
+    """
+    Returns `True` if the `domain` parameter is not `None` and matches the `DOMAIN` regular
+    expression, otherwise it returns `False`
+
+    :param domain: The domain name to validate
+    :type domain: str
+    :return: A boolean value.
+    """
     pattern = re.compile(DOMAIN)
     return False if domain is None else bool(re.search(pattern, domain))
 
 
-def connect(url):
+def connect(url: str):
+    """
+    Attempts to connect to the URL provided, and if successful, returns the response object
+
+    :param url: The URL to connect to
+    :return: A response object.
+    """
     session = requests.Session()
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"}
     try:
         resp = session.get(url, timeout=10, headers=headers)
         resp.raise_for_status()
     except HTTPError as err:
-        print(f"{tc.WARNING} HTTP Error:{tc.RESET} {err}")
+        print(f"{TC.WARNING} HTTP Error:{TC.RESET} {err}")
     except Timeout as err:
-        print(f"{tc.WARNING} Timeout encountered:{tc.RESET} {err}")
+        print(f"{TC.WARNING} Timeout encountered:{TC.RESET} {err}")
     except ConnectionError as err:
-        print(f"{tc.WARNING} Connection Error:{tc.RESET} {err}")
+        print(f"{TC.WARNING} Connection Error:{TC.RESET} {err}")
     else:
         if resp.status_code == 200:
             return resp
     return None
 
 
-async def async_connect(url):
+async def async_connect(url: str):
+    """
+    Creates a session, then tries to get the url, and if successful, it returns the json.
+
+    :param url: The URL to connect to
+    :return: A list of dictionaries.
+    """
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"}
     async with aiohttp.ClientSession(headers=headers) as session:
         try:
             async with session.get(url) as resp:
                 if resp.status == 200:
-                    results = await resp.json()
-                    return results
+                    return await resp.json()
         except aiohttp.ClientConnectorError as error:
             print("Connection Error:", error)
 
 
-def dns_lookup(domain):
+def dns_lookup(domain: str):
+    """
+    If the default dns lookup fails, it will use Google's dns lookup service.
+
+    :param domain: The domain name you want to resolve
+    :return: The IP address of the domain.
+    """
     resolve = resolver.Resolver(configure=False)
     resolve.timeout = 2  # type: ignore
     resolve.lifetime = 2  # type: ignore
@@ -104,7 +129,12 @@ def dns_lookup(domain):
         pass
 
 
-def crt_get_subs(domain):
+def crt_get_subs(domain: str) -> Iterable[str]:
+    """
+    Takes a domain name as input, and returns a generator of subdomains
+
+    :param domain: The domain you want to find subdomains for
+    """
     url = f"https://crt.sh/?q={domain}"
     with contextlib.suppress(Exception):
         content = connect(url).content  # type: ignore
@@ -116,7 +146,12 @@ def crt_get_subs(domain):
                 yield cols[4].text.replace("*", "").strip(".*")
 
 
-def certspotter_get_subs(domain):
+def certspotter_get_subs(domain: str) -> Iterable[str]:
+    """
+    Takes a domain name as an argument, and returns a generator of subdomains
+
+    :param domain: The domain you want to search for subdomains
+    """
     url = "https://api.certspotter.com/v1/issuances?domain="
     results = f"{url}{domain}&include_subdomains=true&expand=dns_names&expand=issuer&expand=cert"
     loop = asyncio.get_event_loop()
@@ -129,7 +164,13 @@ def certspotter_get_subs(domain):
                 yield sub.replace("*.", "")
 
 
-def web_archive(domain):
+def web_archive(domain: str) -> Iterable[str]:
+    """
+    Takes a domain name as an argument, and returns a list of subdomains
+
+    :param domain: The domain you want to search for
+    :type domain: str
+    """
     url = "http://web.archive.org/cdx/search/cdx?url="
     results = f"{url}{domain}/&matchType=domain&output=json&fl=original&collapse=urlkey&limit=500000"
 
@@ -144,7 +185,13 @@ def web_archive(domain):
         yield from list(set(subs))
 
 
-def main(domain):
+def main(domain: str):
+    """
+    Takes a domain name as an argument, performs lookups, and returns a table of subdomains and
+    their IP addresses.
+
+    :param domain: The domain you want to enumerate
+    """
     ptable = PrettyTable()
     ptable.field_names = ["Subdomain", "Domain", "Resolved"]
     ptable.align["Subdomain"] = "r"
@@ -154,12 +201,12 @@ def main(domain):
 
     subs = []
 
-    print(f"\n{tc.YELLOW}[ Trying Web Archive -- archive.org ]{tc.RESET}")
+    print(f"\n{TC.YELLOW}[ Trying Web Archive -- archive.org ]{TC.RESET}")
     for sub in web_archive(domain):
         subs.append(sub)
-        print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub}{tc.RESET}")
+        print(f"{TC.PROCESSING}  Discovered: {TC.BOLD}{sub}{TC.RESET}")
 
-    print(f"\n{tc.YELLOW}[ Performing Lookups -- takes a little longer ]{tc.RESET}")
+    print(f"\n{TC.YELLOW}[ Performing Lookups -- takes a little longer ]{TC.RESET}")
     try:
         for sub in crt_get_subs(domain):
             subs.extend(iter(sub.split(" ")))
@@ -167,27 +214,27 @@ def main(domain):
         if certspotter_get_subs(domain):
             subs.extend(iter(set(certspotter_get_subs(domain))))
         else:
-            print(f"{tc.WARNING}  Certspotter might be throttling us...")
+            print(f"{TC.WARNING}  Certspotter might be throttling us...")
 
         subset = set(subs)
         for sub in subset:
             if sub != domain and not re.search(EMAIL, sub):
-                print(f"{tc.PROCESSING}  Discovered: {tc.BOLD}{sub.lower()}{tc.RESET}")
+                print(f"{TC.PROCESSING}  Discovered: {TC.BOLD}{sub.lower()}{TC.RESET}")
                 start_time = time.time()
                 ip_addr = ""
                 if dns_lookup(sub) is None:
                     if time.time() - start_time > 2:
-                        print(f"{tc.WARNING}  DNS lookup taking longer than expected...trying dns.google.com")
+                        print(f"{TC.WARNING}  DNS lookup taking longer than expected...trying dns.google.com")
                         with contextlib.suppress(AttributeError):
                             ip_addr = dns_lookup(domain).fallback()  # type: ignore
 
                     else:
-                        ip_addr = f"{tc.GRAY}{dns_lookup(sub)}{tc.RESET}"
+                        ip_addr = f"{TC.GRAY}{dns_lookup(sub)}{TC.RESET}"
                 else:
                     ip_addr = dns_lookup(sub)
 
                 root = sub.split(domain)
-                subdomain = f"{tc.BOLD}{''.join(root).lower()}{tc.RESET}"
+                subdomain = f"{TC.BOLD}{''.join(root).lower()}{TC.RESET}"
                 ptable.add_row([subdomain, domain, str(ip_addr)])
 
         if ptable._rows:
@@ -199,7 +246,7 @@ def main(domain):
 
 
 if __name__ == "__main__":
-    banner = rf"""
+    BANNER = rf"""
       _____       __       ______
      / ___/__  __/ /_     / ____/___  __  ______ ___
      \__ \/ / / / __ \   / __/ / __ \/ / / / __ `__ \
@@ -207,7 +254,7 @@ if __name__ == "__main__":
    /____/\__,_/_.___/  /_____/_/ /_/\__,_/_/ /_/ /_/
    v{__version__}
     """
-    print(tc.CYAN + banner + tc.RESET)
+    print(TC.CYAN + BANNER + TC.RESET)
 
     if len(sys.argv) < 2:
         sys.exit("sub_enum.py: error: the following arguments are required: domain")
@@ -215,10 +262,10 @@ if __name__ == "__main__":
         DOM = sys.argv[1]
 
     if valid_domain(DOM):
-        print(f"\n{tc.CYAN}Gathering subdomains...{tc.RESET}")
+        print(f"\n{TC.CYAN}Gathering subdomains...{TC.RESET}")
         try:
             main(DOM)
         except KeyboardInterrupt:
             sys.exit("-- Exited --")
     else:
-        sys.exit(f"{tc.ERROR} {tc.BOLD}'{DOM}'{tc.RESET} does not appear to be a valid domain.")
+        sys.exit(f"{TC.ERROR} {TC.BOLD}'{DOM}'{TC.RESET} does not appear to be a valid domain.")
