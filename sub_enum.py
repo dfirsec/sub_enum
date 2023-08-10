@@ -5,18 +5,28 @@ import contextlib
 import re
 import sys
 import time
-from typing import Any, Iterable, List, Optional, Set
+from collections.abc import Iterable
+from typing import Any
 from urllib.parse import urlparse
 
 import aiohttp
 import requests
 from aiohttp.client_exceptions import ClientConnectorError
 from bs4 import BeautifulSoup
-from dns import exception, name, resolver
+from dns import exception
+from dns import name
+from dns import resolver
 from prettytable import PrettyTable
-from requests.exceptions import HTTPError, Timeout
-
-from termcolors import BOLD, CYAN, ERROR, GRAY, PROCESSING, RESET, WARNING, YELLOW
+from requests.exceptions import HTTPError
+from requests.exceptions import Timeout
+from termcolors import BOLD
+from termcolors import CYAN
+from termcolors import ERROR
+from termcolors import GRAY
+from termcolors import PROCESSING
+from termcolors import RESET
+from termcolors import WARNING
+from termcolors import YELLOW
 
 author = "DFIRSec (@pulsecode)"
 version = "0.0.8"
@@ -31,8 +41,7 @@ DOMAIN = (
 
 
 def valid_domain(domain: str) -> bool:
-    """
-    Domain name validation.
+    """Domain name validation.
 
     Args:
         domain (str): The domain name to validate.
@@ -44,9 +53,8 @@ def valid_domain(domain: str) -> bool:
     return False if domain is None else bool(re.search(pattern, domain))
 
 
-def connect(url: str) -> Optional[requests.Response]:
-    """
-    Attempts to connect to the URL provided, and if successful, returns the response object.
+def connect(url: str) -> requests.Response | None:
+    """Attempts to connect to the URL provided, and if successful, returns the response object.
 
     Args:
         url (str): The URL to connect to.
@@ -55,7 +63,9 @@ def connect(url: str) -> Optional[requests.Response]:
         A response object.
     """
     session = requests.Session()
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"
+    }
     http_ok = 200
     try:
         resp = session.get(url, timeout=10, headers=headers)
@@ -70,9 +80,8 @@ def connect(url: str) -> Optional[requests.Response]:
         return resp if resp.status_code == http_ok else None
 
 
-async def fetch_url(url: str) -> Optional[requests.Response]:
-    """
-    Creates a session, then tries to get the url, and if successful, it returns the json.
+async def fetch_url(url: str) -> requests.Response | None:
+    """Creates a session, then tries to get the url, and if successful, it returns the json.
 
     Args:
         url (str): The URL to connect to.
@@ -80,7 +89,9 @@ async def fetch_url(url: str) -> Optional[requests.Response]:
     Returns:
         A response object.
     """
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"
+    }
     http_ok = 200
     async with aiohttp.ClientSession(headers=headers) as session:
         try:
@@ -91,7 +102,7 @@ async def fetch_url(url: str) -> Optional[requests.Response]:
             print("Connection Error:", error)
 
 
-def fallback(domain: str) -> Optional[Any]:
+def fallback(domain: str) -> Any | None:
     """Fallback method if default dns lookup fails.
 
     Args:
@@ -113,8 +124,7 @@ def fallback(domain: str) -> Optional[Any]:
 
 
 def dns_resolver() -> resolver.Resolver:
-    """
-    Returns a DNS resolver object with specific timeout, lifetime, and nameserver settings.
+    """Returns a DNS resolver object with specific timeout, lifetime, and nameserver settings.
 
     Returns:
         An instance of the `resolver.Resolver` class with specific configurations for timeout,
@@ -132,9 +142,8 @@ def dns_resolver() -> resolver.Resolver:
     return result
 
 
-def dns_lookup(domain: str) -> Optional[Any]:
-    """
-    If the default dns lookup fails, it will use Google's dns lookup service.
+def dns_lookup(domain: str) -> Any | None:
+    """If the default dns lookup fails, it will use Google's dns lookup service.
 
     Args:
         domain (str): The domain name you want to resolve.
@@ -159,8 +168,7 @@ def dns_lookup(domain: str) -> Optional[Any]:
 
 
 def crt_get_subs(domain: str) -> Iterable[str]:
-    """
-    Takes a domain name as an argument, and returns a generator of subdomains from crt.sh.
+    """Takes a domain name as an argument, and returns a generator of subdomains from crt.sh.
 
     Args:
         domain (str): The domain you want to find subdomains for.
@@ -180,8 +188,7 @@ def crt_get_subs(domain: str) -> Iterable[str]:
 
 
 def certspotter_get_subs(domain: str) -> Iterable[str]:
-    """
-    Takes a domain name as an argument, and returns a generator of subdomains from certspotter.
+    """Takes a domain name as an argument, and returns a generator of subdomains from certspotter.
 
     Args:
         domain: The domain you want to search for subdomains.
@@ -196,7 +203,9 @@ def certspotter_get_subs(domain: str) -> Iterable[str]:
 
     with contextlib.suppress(Exception):
         dns_lists = [name["dns_names"] for name in grab]  # type: ignore
-        results = [dns_name for dns_list in dns_lists for dns_name in dns_list]  # combine the lists
+        results = [
+            dns_name for dns_list in dns_lists for dns_name in dns_list
+        ]  # combine the lists
 
         for sub in results:
             if domain in sub:
@@ -204,8 +213,7 @@ def certspotter_get_subs(domain: str) -> Iterable[str]:
 
 
 def web_archive(domain: str) -> Iterable[str]:
-    """
-    Takes a domain name as an argument, and returns a list of subdomains.
+    """Takes a domain name as an argument, and returns a list of subdomains.
 
     Args:
         domain (str): The domain you want to search for
@@ -223,13 +231,14 @@ def web_archive(domain: str) -> Iterable[str]:
     except TypeError:
         print(f"No data available for {domain}")
     else:
-        subs = [urlparse("".join(result)).netloc.replace(":80", "") for result in lists[1:]]
+        subs = [
+            urlparse("".join(result)).netloc.replace(":80", "") for result in lists[1:]
+        ]
         yield from list(set(subs))
 
 
-def print_discovered_subdomains(subs: List[str], domain: str) -> List[str]:
-    """
-    Prints each discovered subdomain and returns the list of subdomains.
+def print_discovered_subdomains(subs: list[str]) -> list[str]:
+    """Prints each discovered subdomain and returns the list of subdomains.
 
     Args:
         subs (List[str]): A list of discovered subdomains (strings).
@@ -245,9 +254,8 @@ def print_discovered_subdomains(subs: List[str], domain: str) -> List[str]:
     return subdomains
 
 
-def add_subdomains_to_table(ptable: PrettyTable, subset: Set[str], domain: str) -> None:
-    """
-    Adds discovered subdomains to a PrettyTable object with corresponding domain and IP.
+def add_subdomains_to_table(ptable: PrettyTable, subset: set[str], domain: str) -> None:
+    """Adds discovered subdomains to a PrettyTable object.
 
     Args:
         ptable (PrettyTable): Table to add the subdomains to.
@@ -262,9 +270,11 @@ def add_subdomains_to_table(ptable: PrettyTable, subset: Set[str], domain: str) 
 
             if ip_addr is None:
                 if time.time() - start_time > 2:
-                    print(f"{WARNING}  DNS lookup taking longer than expected...trying dns.google.com")
+                    print(
+                        f"{WARNING}  DNS lookup taking longer than expected...trying dns.google.com"
+                    )
                     with contextlib.suppress(AttributeError):
-                        ip_addr = dns_lookup(domain).fallback()  # type: ignore # noqa: WPS220
+                        ip_addr = dns_lookup(domain).fallback()  # type: ignore
                 else:
                     ip_addr = f"{GRAY}{ip_addr}{RESET}"
 
@@ -273,9 +283,8 @@ def add_subdomains_to_table(ptable: PrettyTable, subset: Set[str], domain: str) 
             ptable.add_row([subdomain, domain, str(ip_addr)])
 
 
-def main(domain: str) -> None:  # noqa: WPS213
-    """
-    Performs subdomain enumeration using various sources and displays the results.
+def main(domain: str) -> None:
+    """Performs subdomain enumeration using various sources.
 
     Args:
         domain (str): The domain you want to search for subdomains.
@@ -290,7 +299,7 @@ def main(domain: str) -> None:  # noqa: WPS213
     subs = []
 
     print(f"\n{YELLOW}[ Trying Web Archive -- archive.org ]{RESET}")
-    subs = print_discovered_subdomains(list(web_archive(domain)), domain)
+    subs = print_discovered_subdomains(list(web_archive(domain)))
 
     print(f"\n{YELLOW}[ Performing Lookups -- takes a little longer ]{RESET}")
     try:  # noqa: WPS229
@@ -325,7 +334,7 @@ if __name__ == "__main__":
     print(CYAN + BANNER + RESET)
 
     if len(sys.argv) < 2:
-        sys.exit("sub_enum.py: error: the following arguments are required: domain")
+        sys.exit("Error: the following arguments are required: domain")
     else:
         DOM = sys.argv[1]
 
