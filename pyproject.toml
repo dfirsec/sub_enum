@@ -7,7 +7,7 @@ license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-requests = "^2.32.0"
+requests = "^2.32.4"
 aiohttp = "^3.10.11"
 colorama = "^0.4.5"
 dnspython = "^2.6.1"
