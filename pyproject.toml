@@ -1,23 +1,15 @@
-[tool.poetry]
-name = "sub_enum"
-version = "0.0.7"
-description = "Script to retrieve subdomains from given domain"
-authors = ["Mitch Haddadi <12067255+dfirsec@users.noreply.github.com>"]
-license = "MIT"
-
-[tool.poetry.dependencies]
-python = "^3.10"
-requests = "^2.31.0"
-aiohttp = "^3.8.5"
-colorama = "^0.4.5"
-dnspython = "^2.2.1"
-lxml = "^4.9.1"
-prettytable = "^3.3.0"
-validators = "^0.20.0"
-beautifulsoup4 = "^4.11.1"
-
-[tool.poetry.dev-dependencies]
-
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[project]
+name = "sub-enum"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "aiohttp>=3.14.1",
+    "beautifulsoup4>=4.15.0",
+    "colorama>=0.4.6",
+    "dnspython>=2.8.0",
+    "lxml>=6.1.1",
+    "prettytable>=3.18.0",
+    "requests>=2.34.2",
+    "rich>=15.0.0",
+    "validators>=0.35.0",
+]

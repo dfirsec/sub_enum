@@ -1,47 +1,41 @@
 """Script to retrieve subdomains from given domain."""
 
 import asyncio
-import contextlib
 import re
 import sys
-import time
-from collections.abc import Iterable
-from typing import Any
+from collections.abc import AsyncGenerator
+from collections.abc import Callable
 from urllib.parse import urlparse
 
 import aiohttp
-import requests
-from aiohttp.client_exceptions import ClientConnectorError
+import dns.asyncresolver
+import dns.exception
 from bs4 import BeautifulSoup
-from dns import exception
-from dns import name
-from dns import resolver
-from prettytable import PrettyTable
-from requests.exceptions import HTTPError
-from requests.exceptions import Timeout
-from termcolors import BOLD
-from termcolors import CYAN
-from termcolors import ERROR
-from termcolors import GRAY
-from termcolors import PROCESSING
-from termcolors import RESET
-from termcolors import WARNING
-from termcolors import YELLOW
+from rich.console import Console
+from rich.console import Group
+from rich.live import Live
+from rich.progress import Progress
+from rich.progress import SpinnerColumn
+from rich.progress import TextColumn
+from rich.table import Table
+from rich.tree import Tree
 
-author = "DFIRSec (@pulsecode)"
-version = "0.0.8"
+__author__ = "DFIRSec (@pulsecode)"
+__version__ = "0.1.2"
 
-# regexes
-EMAIL = r"(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]{2,5}$)"
-IPV4 = re.compile(r"(?![0])\d+\.\d{1,3}\.\d{1,3}\.(?![0])\d{1,3}")
-DOMAIN = (
+# Constants
+EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]{2,5}$")
+IPV4_REGEX = re.compile(r"(?![0])\d+\.\d{1,3}\.\d{1,3}\.(?![0])\d{1,3}")
+DOMAIN_REGEX = re.compile(
     r"([^\\n|\W|:|\.][A-Za-z0-9]+(?:[\-|\.|][A-Za-z0-9]+)*(?:\[\.\]|\.)"
-    r"(?![a-z-]*.[i\.e]$|[e\.g]$)(?:[a-z]{2,4})\b|(?:\[\.\][a-z]{2,4})(?!@)$)"
+    r"(?![a-z-]*.[i\.e]$|[e\.g]$)(?:[a-z]{2,4})\b|(?:\[\.\][a-z]{2,4})(?!@)$)",
 )
 
+console = Console(highlight=False)
 
-def valid_domain(domain: str) -> bool:
-    """Domain name validation.
+
+def validate_domain(domain: str) -> bool:
+    """Validate the given domain name.
 
     Args:
         domain (str): The domain name to validate.
@@ -49,300 +43,230 @@ def valid_domain(domain: str) -> bool:
     Returns:
         bool: True if the domain is valid, False otherwise.
     """
-    pattern = re.compile(DOMAIN)
-    return False if domain is None else bool(re.search(pattern, domain))
+    return bool(DOMAIN_REGEX.search(domain)) if domain else False
 
 
-def connect(url: str) -> requests.Response | None:
-    """Attempts to connect to the URL provided, and if successful, returns the response object.
+async def async_dns_lookup(domain: str) -> str | None:
+    """Perform asynchronous DNS lookup for the given domain using dnspython.
 
     Args:
-        url (str): The URL to connect to.
+        domain (str): The domain name to resolve.
 
     Returns:
-        A response object.
+        Optional[str]: The IP address of the domain if found, None otherwise.
     """
-    session = requests.Session()
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"
-    }
-    http_ok = 200
+    resolver = dns.asyncresolver.Resolver()
+    resolver.nameservers = ["1.1.1.1", "8.8.8.8", "9.9.9.9"]
+    resolver.lifetime = 5  # timeout in seconds
+
     try:
-        resp = session.get(url, timeout=10, headers=headers)
-        resp.raise_for_status()
-    except HTTPError as err:
-        print(f"{WARNING} HTTP Error:{RESET} {err}")
-    except Timeout as err:
-        print(f"{WARNING} Timeout encountered:{RESET} {err}")
-    except ConnectionError as err:
-        print(f"{WARNING} Connection Error:{RESET} {err}")
-    else:
-        return resp if resp.status_code == http_ok else None
+        answers = await resolver.resolve(domain, "A")
+        return str(answers[0]) if answers else None
+    except dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.exception.Timeout:
+        return await fallback_dns_lookup(domain)
+    except dns.exception.DNSException:
+        return None
 
 
-async def fetch_url(url: str) -> requests.Response | None:
-    """Creates a session, then tries to get the url, and if successful, it returns the json.
+async def fallback_dns_lookup(domain: str) -> str | None:
+    """Fallback method for DNS lookup using Google's DNS service.
 
     Args:
-        url (str): The URL to connect to.
+        domain (str): The domain name to resolve.
 
     Returns:
-        A response object.
-    """
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0"
-    }
-    http_ok = 200
-    async with aiohttp.ClientSession(headers=headers) as session:
-        try:
-            async with session.get(url) as resp:
-                if resp.status == http_ok:
-                    return await resp.json()
-        except ClientConnectorError as error:
-            print("Connection Error:", error)
-
-
-def fallback(domain: str) -> Any | None:
-    """Fallback method if default dns lookup fails.
-
-    Args:
-        domain (str): The domain name you want to resolve.
-
-    Returns:
-        The IP address of the domain.
+        Optional[str]: The IP address of the domain if found, None otherwise.
     """
     url = f"https://dns.google.com/resolve?name={domain}&type=A"
-    with contextlib.suppress(KeyError, IndexError):
-        response = requests.get(url, timeout=10).json()
-        answers = response.get("Answer", [])
-
-        for answer in answers:
+    if response := await fetch_url(url):
+        for answer in response.get("Answer", []):
             ip_address = answer.get("data")
-            if re.findall(IPV4, ip_address):
+            if IPV4_REGEX.match(ip_address):
                 return ip_address
     return None
 
 
-def dns_resolver() -> resolver.Resolver:
-    """Returns a DNS resolver object with specific timeout, lifetime, and nameserver settings.
+async def fetch_url(url: str) -> dict | None:
+    """Asynchronously fetch JSON data from a given URL.
 
     Returns:
-        An instance of the `resolver.Resolver` class with specific configurations for timeout,
-        lifetime, and nameservers.
+        Optional[dict]: The JSON response if successful, None otherwise.
     """
-    result = resolver.Resolver(configure=False)
-    result.timeout = 2
-    result.lifetime = 2
-    result.nameservers = [
-        "1.1.1.1",
-        "8.8.8.8",
-        "9.9.9.9",
-    ]
-
-    return result
-
-
-def dns_lookup(domain: str) -> Any | None:
-    """If the default dns lookup fails, it will use Google's dns lookup service.
-
-    Args:
-        domain (str): The domain name you want to resolve.
-
-    Returns:
-        The IP address of the domain.
-    """
-    resolve = dns_resolver()
-
-    try:
-        answers = resolve.resolve(domain, "A")
-        return answers[0] if answers else None
-    except (
-        resolver.NoAnswer,
-        exception.Timeout,
-        resolver.NXDOMAIN,
-        resolver.NoNameservers,
-    ):
-        return fallback(domain)
-    except (name.NameTooLong, name.LabelTooLong, name.EmptyLabel):
-        return None
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:40.0) Gecko/20100101 Firefox/43.0",
+    }
+    async with aiohttp.ClientSession(headers=headers) as session:
+        try:
+            async with asyncio.timeout(10):
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        return await resp.json()
+        except aiohttp.ClientError as error:
+            console.print(f"[bold red]Connection Error:[/] {error}")
+        except TimeoutError:
+            return None
+    return None
 
 
-def crt_get_subs(domain: str) -> Iterable[str]:
-    """Takes a domain name as an argument, and returns a generator of subdomains from crt.sh.
-
-    Args:
-        domain (str): The domain you want to find subdomains for.
+async def crt_get_subs(domain: str) -> AsyncGenerator[str]:
+    """Retrieve subdomains from crt.sh.
 
     Yields:
-        A generator of subdomains.
+        str: Discovered subdomains.
     """
     url = f"https://crt.sh/?q={domain}"
-    with contextlib.suppress(Exception):
-        content = connect(url).content  # type: ignore
-        soup = BeautifulSoup(content, "lxml")
-        table = soup.select("table")[1]
-        for row in table.find_all("tr")[1:]:
-            cols = row.find_all("td")
-            if len(cols) > 1:
-                yield cols[4].text.replace("*", "").strip(".*")
-
-
-def certspotter_get_subs(domain: str) -> Iterable[str]:
-    """Takes a domain name as an argument, and returns a generator of subdomains from certspotter.
-
-    Args:
-        domain: The domain you want to search for subdomains.
-
-    Yields:
-        A generator of subdomains.
-    """
-    url = "https://api.certspotter.com/v1/issuances?domain="
-    results = f"{url}{domain}&include_subdomains=true&expand=dns_names&expand=issuer&expand=cert"
-
-    grab = asyncio.run(fetch_url(url))
-
-    with contextlib.suppress(Exception):
-        dns_lists = [name["dns_names"] for name in grab]  # type: ignore
-        results = [
-            dns_name for dns_list in dns_lists for dns_name in dns_list
-        ]  # combine the lists
-
-        for sub in results:
-            if domain in sub:
-                yield sub.replace("*.", "")
-
-
-def web_archive(domain: str) -> Iterable[str]:
-    """Takes a domain name as an argument, and returns a list of subdomains.
-
-    Args:
-        domain (str): The domain you want to search for
-
-    Yields:
-        A generator of subdomains.
-    """
-    url = "http://web.archive.org/cdx/search/cdx?url="
-    results = f"{url}{domain}/&matchType=domain&output=json&fl=original&collapse=urlkey&limit=500000"
-
-    grab = asyncio.run(fetch_url(results))
-
-    try:
-        lists = list(grab)  # type: ignore
-    except TypeError:
-        print(f"No data available for {domain}")
-    else:
-        subs = [
-            urlparse("".join(result)).netloc.replace(":80", "") for result in lists[1:]
-        ]
-        yield from list(set(subs))
-
-
-def print_discovered_subdomains(subs: list[str]) -> list[str]:
-    """Prints each discovered subdomain and returns the list of subdomains.
-
-    Args:
-        subs (List[str]): A list of discovered subdomains (strings).
-        domain (str): The domain parameter is a string representing the main domain name.
-
-    Returns:
-        A list of discovered subdomains.
-    """
     subdomains = []
-    for sub in subs:
-        subdomains.append(sub)
-        print(f"{PROCESSING}  Discovered: {BOLD}{sub}{RESET}")
-    return subdomains
+    async with aiohttp.ClientSession() as session, session.get(url) as response:
+        if response.status == 200:
+            content = await response.text()
+            soup = BeautifulSoup(content, "lxml")
+            table = soup.select("table")[1]
+            for row in table.find_all("tr")[1:]:
+                cols = row.find_all("td")
+                if len(cols) > 1:
+                    subdomains.append(cols[4].text.replace("*", "").strip(".*"))
+
+    for subdomain in subdomains:
+        yield subdomain
 
 
-def add_subdomains_to_table(ptable: PrettyTable, subset: set[str], domain: str) -> None:
-    """Adds discovered subdomains to a PrettyTable object.
+async def certspotter_get_subs(domain: str) -> AsyncGenerator[str]:
+    """Retrieve subdomains from certspotter.
+
+    Yields:
+        str: Discovered subdomains.
+    """
+    url = f"https://api.certspotter.com/v1/issuances?domain={domain}&include_subdomains=true&expand=dns_names"
+    response = await fetch_url(url)
+
+    if response:
+        dns_lists = [name["dns_names"] for name in response]
+        for dns_name in (name for dns_list in dns_lists for name in dns_list):
+            if domain in dns_name:
+                yield dns_name.replace("*.", "")
+
+
+async def web_archive(domain: str) -> AsyncGenerator[str]:
+    """Retrieve subdomains from web.archive.org.
+
+    Yields:
+        str: Discovered subdomains.
+    """
+    url = f"http://web.archive.org/cdx/search/cdx?url={domain}/&matchType=domain&output=json&fl=original&collapse=urlkey&limit=500000"
+    response = await fetch_url(url)
+
+    if response:
+        for result in response[1:]:
+            yield urlparse("".join(result)).netloc.replace(":80", "")
+    else:
+        console.print(f"[yellow]No data available for {domain} from web.archive.org[/]")
+
+
+def print_discovered_subdomains(subs: set[str], source: str) -> None:
+    """Print discovered subdomains."""
+    tree = Tree(f"\n:mag_right: [green]Discovered with {source}")
+    for sub in sorted(subs):
+        tree.add(sub)
+    console.print(tree)
+
+
+async def add_subdomains_to_table(table: Table, subs: set[str], domain: str) -> None:
+    """Add subdomains to a table.
 
     Args:
-        ptable (PrettyTable): Table to add the subdomains to.
-        subset (Set[str]): A set of subdomains to be added to the table.
-        domain (str): The main domain that the subdomains belong to.
+        table (Table): The table to add the subdomains to.
+        subs (set[str]): The set of subdomains to iterate over.
+        domain (str): The main domain.
     """
-    for sub in subset:
-        if sub != domain and not re.search(EMAIL, sub):
-            print(f"{PROCESSING}  Discovered: {BOLD}{sub.lower()}{RESET}")
-            start_time = time.time()
-            ip_addr = dns_lookup(sub)
-
-            if ip_addr is None:
-                if time.time() - start_time > 2:
-                    print(
-                        f"{WARNING}  DNS lookup taking longer than expected...trying dns.google.com"
-                    )
-                    with contextlib.suppress(AttributeError):
-                        ip_addr = dns_lookup(domain).fallback()  # type: ignore
-                else:
-                    ip_addr = f"{GRAY}{ip_addr}{RESET}"
-
-            root = sub.split(domain)
-            subdomain = f"{BOLD}{''.join(root).lower()}{RESET}"
-            ptable.add_row([subdomain, domain, str(ip_addr)])
+    for sub in sorted(subs):
+        if sub != domain and not EMAIL_REGEX.search(sub):
+            ip_addr = await async_dns_lookup(sub) or "N/A"
+            subdomain = "".join(sub.split(domain)).lower().replace(".", "")
+            table.add_row(subdomain, domain, str(ip_addr))
 
 
-def main(domain: str) -> None:
-    """Performs subdomain enumeration using various sources.
+async def main(domain: str) -> None:
+    """Perform subdomain enumeration using various sources.
 
     Args:
-        domain (str): The domain you want to search for subdomains.
+        domain (str): The domain to search for subdomains.
     """
-    ptable = PrettyTable()
-    ptable.field_names = ["Subdomain", "Domain", "Resolved"]
-    ptable.align["Subdomain"] = "r"
-    ptable.align["Domain"] = "l"
-    ptable.align["Resolved"] = "l"
-    ptable.sortby = "Subdomain"
+    table = Table(title="Discovered Subdomains", show_header=True, header_style="bold magenta")
+    table.add_column("Subdomain", style="cyan")
+    table.add_column("Domain", style="magenta")
+    table.add_column("Resolved", style="green")
 
-    subs = []
+    subs = set()
+    progress = Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True)
 
-    print(f"\n{YELLOW}[ Trying Web Archive -- archive.org ]{RESET}")
-    subs = print_discovered_subdomains(list(web_archive(domain)))
+    overall_progress = progress.add_task("Enumerating subdomains...", total=4)
 
-    print(f"\n{YELLOW}[ Performing Lookups -- takes a little longer ]{RESET}")
-    try:  # noqa: WPS229
-        for sub in crt_get_subs(domain):
-            subs.extend(iter(sub.split(" ")))
+    async def search_and_print(source_func: Callable, source_name: str) -> set[str]:
+        """Search for subdomains using a given source function.
 
-        if certspotter_get_subs(domain):
-            subs.extend(iter(set(certspotter_get_subs(domain))))
-        else:
-            print(f"{WARNING}  Certspotter might be throttling us...")
+        Returns:
+            set[str]: A set of discovered subdomains.
+        """
+        task = progress.add_task(f"Searching {source_name}...")
+        source_subs = {sub async for sub in source_func(domain)}
+        progress.update(task, completed=True)
+        progress.remove_task(task)
+        progress.update(overall_progress, advance=1)
+        if source_subs:
+            subs.update(source_subs)
+            print_discovered_subdomains(source_subs, source_name)
+        return source_subs
 
-        subset = set(subs)
-        add_subdomains_to_table(ptable, subset, domain)
+    with Live(Group(progress), transient=True, console=console) as live:
+        _archive_subs = await search_and_print(web_archive, "Web Archive")
+        _crt_subs = await search_and_print(crt_get_subs, "crt.sh")
+        certspotter_subs = await search_and_print(certspotter_get_subs, "Certspotter")
 
-        if ptable.get_string() != "":  # noqa: WPS504
-            print(f"\n{ptable}")
-        else:
-            print(f"No data available for {domain}")
-    except KeyboardInterrupt:
-        sys.exit("-- Exited --")
+        if not certspotter_subs:
+            live.console.print("[yellow]Certspotter might be throttling us...[/]")
+
+        dns_task = progress.add_task("Performing DNS Lookups...", total=len(subs))
+        for sub in subs:
+            if sub != domain and not EMAIL_REGEX.search(sub):
+                ip_addr = await async_dns_lookup(sub) or "N/A"
+                subdomain = "".join(sub.split(domain)).lower().replace(".", "")
+                table.add_row(subdomain, domain, str(ip_addr))
+            progress.update(dns_task, advance=1)
+
+        progress.update(overall_progress, completed=True)
+
+    if table.row_count > 0:
+        print("\n")
+        console.print(table)
+    else:
+        console.print(f"[red]No data available for {domain}[/]")
 
 
 if __name__ == "__main__":
-    BANNER = rf"""
+    BANNER = f"""
       _____       __       ______
      / ___/__  __/ /_     / ____/___  __  ______ ___
-     \__ \/ / / / __ \   / __/ / __ \/ / / / __ `__ \
+     \\__ \\/ / / / __ \\   / __/ / __ \\/ / / / __ `__
     ___/ / /_/ / /_/ /  / /___/ / / / /_/ / / / / / /
-   /____/\__,_/_.___/  /_____/_/ /_/\__,_/_/ /_/ /_/
-   v{version}
+   /____/\\__,_/_.___/  /_____/_/ /_/\\__,_/_/ /_/ /_/
+   v{__version__}
     """
-    print(CYAN + BANNER + RESET)
+
+    console.print(BANNER, style="green")
 
     if len(sys.argv) < 2:
-        sys.exit("Error: the following arguments are required: domain")
-    else:
-        DOM = sys.argv[1]
+        console.print(f"[bold red]Usage: python {sys.argv[0]} <domain>[/]")
+        sys.exit(1)
 
-    if valid_domain(DOM):
-        print(f"\n{CYAN}Gathering subdomains...{RESET}")
+    target_domain = sys.argv[1]
+
+    if validate_domain(target_domain):
+        console.print("[cyan]Gathering subdomains...[/]")
         try:
-            main(DOM)
+            asyncio.run(main(target_domain))
         except KeyboardInterrupt:
-            sys.exit("-- Exited --")
+            console.print("[bold red]-- Exited --[/]")
+            sys.exit(1)
     else:
-        sys.exit(f"{ERROR} {BOLD}'{DOM}'{RESET} does not appear to be a valid domain.")
+        console.print(f"[bold red]'{target_domain}' does not appear to be a valid domain.[/]")
+        sys.exit(1)
